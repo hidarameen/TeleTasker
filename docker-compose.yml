@@ -1,0 +1,44 @@
+
+version: '3.8'
+
+services:
+  telegram-bot:
+    build: .
+    container_name: telegram_forwarding_bot
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      - BOT_TOKEN=${BOT_TOKEN}
+      - API_ID=${API_ID}
+      - API_HASH=${API_HASH}
+      - SECRET_KEY=${SECRET_KEY}
+      - DATABASE_URL=sqlite:///data/telegram_bot.db
+      - FLASK_ENV=production
+    volumes:
+      - ./data:/app/data
+      - ./watermark_images:/app/watermark_images
+      - ./attached_assets:/app/attached_assets
+    networks:
+      - telegram-network
+
+  # Optional: PostgreSQL Database
+  # postgres:
+  #   image: postgres:15
+  #   container_name: telegram_bot_db
+  #   restart: unless-stopped
+  #   environment:
+  #     POSTGRES_DB: telegram_bot
+  #     POSTGRES_USER: telegram_user
+  #     POSTGRES_PASSWORD: ${DB_PASSWORD}
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #   networks:
+  #     - telegram-network
+
+networks:
+  telegram-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
