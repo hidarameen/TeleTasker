@@ -1,0 +1,158 @@
+# ===== ملفات Python =====
+# Python files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# ===== البيئات الافتراضية =====
+# Virtual environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# ===== قاعدة البيانات =====
+# Database
+*.db
+*.sqlite
+*.sqlite3
+data/
+*.log
+
+# ===== الملفات المؤقتة =====
+# Temporary files
+*.tmp
+*.temp
+temp/
+tmp/
+/tmp/
+*.swp
+*.swo
+*~
+
+# ===== ملفات النظام =====
+# System files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# ===== ملفات IDE =====
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+
+# ===== ملفات السجلات =====
+# Log files
+logs/
+*.log
+*.log.*
+
+# ===== ملفات الوسائط =====
+# Media files
+watermark_images/
+attached_assets/
+uploads/
+downloads/
+
+# ===== ملفات الإعدادات =====
+# Configuration files
+.env
+.env.local
+.env.production
+.env.staging
+config.ini
+settings.json
+
+# ===== ملفات Docker =====
+# Docker files
+.dockerignore
+docker-compose.override.yml
+
+# ===== ملفات الاختبار =====
+# Test files
+.coverage
+.pytest_cache/
+.tox/
+.nox/
+coverage.xml
+*.cover
+.hypothesis/
+
+# ===== ملفات النسخ الاحتياطية =====
+# Backup files
+*.bak
+*.backup
+*.old
+*.orig
+
+# ===== ملفات التشفير =====
+# Encryption files
+*.key
+*.pem
+*.crt
+*.csr
+
+# ===== ملفات الضغط =====
+# Archive files
+*.zip
+*.tar.gz
+*.rar
+*.7z
+
+# ===== ملفات خاصة بالمشروع =====
+# Project specific files
+telegram_bot.db
+session_*
+*.session
+*.session-journal
+
+# ===== ملفات FFmpeg المؤقتة =====
+# FFmpeg temporary files
+temp_watermarked_*
+watermarked_*
+ffmpeg_*
+
+# ===== ملفات الذاكرة المؤقتة =====
+# Cache files
+.cache/
+cache/
+*.cache
+
+# ===== ملفات الأمان =====
+# Security files
+.secrets
+secrets.json
+*.key
+*.pem
