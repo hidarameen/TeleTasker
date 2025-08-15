@@ -1,6 +1,18 @@
 """
-Userbot Service for Message Forwarding
+Userbot Service for Message Forwarding - الإصدار المحسن
 Uses Telethon for automated message forwarding between chats
+
+التحسينات الرئيسية:
+1. معالجة الوسائط مرة واحدة وإعادة استخدامها لكل الأهداف
+2. تحسين أداء العلامة المائية
+3. ذاكرة مؤقتة ذكية للوسائط المعالجة
+4. تحسين معالجة الفيديو
+
+Main Improvements:
+1. Process media once and reuse for all targets
+2. Enhanced watermark performance
+3. Smart cache for processed media
+4. Improved video processing
 """
 import logging
 import asyncio
@@ -699,6 +711,31 @@ class UserbotService:
                 
                 album_collector = self.album_collectors[user_id]
 
+                # ===== معالجة الوسائط مرة واحدة =====
+                # بدلاً من معالجة الوسائط لكل هدف بشكل منفصل، نقوم بمعالجتها مرة واحدة
+                # وإعادة استخدامها لكل الأهداف لتحسين الأداء وتقليل استهلاك الموارد
+                processed_media = None
+                processed_filename = None
+                
+                if event.message.media:
+                    # ===== معالجة الوسائط مرة واحدة =====
+                    # بدلاً من معالجة الوسائط لكل هدف بشكل منفصل، نقوم بمعالجتها مرة واحدة
+                    # باستخدام أول مهمة وإعادة استخدامها لكل الأهداف
+                    first_task = matching_tasks[0]
+                    logger.info(f"🎬 معالجة الوسائط مرة واحدة للمهمة {first_task['id']} وإعادة استخدامها لكل الأهداف")
+                    
+                    try:
+                        # تطبيق العلامة المائية مرة واحدة
+                        processed_media, processed_filename = await self.apply_watermark_to_media(event, first_task['id'])
+                        if processed_media and processed_media != event.message.media:
+                            logger.info(f"✅ تم معالجة الوسائط بنجاح: {processed_filename}")
+                        else:
+                            logger.info("🔄 لم يتم تطبيق العلامة المائية، استخدام الوسائط الأصلية")
+                    except Exception as e:
+                        logger.error(f"❌ خطأ في معالجة الوسائط: {e}")
+                        processed_media = event.message.media
+                        processed_filename = None
+
                 # Forward message to all target chats
                 for i, task in enumerate(matching_tasks):
                     try:
@@ -902,16 +939,19 @@ class UserbotService:
                                         # Split album: send each media individually
                                         logger.info(f"📸 تفكيك الألبوم: إرسال الوسائط بشكل منفصل للمهمة {task['id']}")
                                         
-                                        # Apply watermark if enabled
-                                        watermarked_media, modified_filename = await self.apply_watermark_to_media(event, task['id'])
-                                        logger.info(f"📁 سيتم إرسال الملف باسم: {modified_filename}")
+                                        # ===== استخدام الوسائط المعالجة مسبقاً =====
+                                        # استخدام الوسائط التي تم معالجتها مرة واحدة بدلاً من معالجتها لكل هدف
+                                        # هذا يحسن الأداء ويقلل من استهلاك الموارد
+                                        media_to_send = processed_media if processed_media else event.message.media
+                                        filename_to_send = processed_filename if processed_filename else "media_file.jpg"
+                                        logger.info(f"📁 سيتم إرسال الملف باسم: {filename_to_send}")
                                         
                                         from send_file_helper import TelethonFileSender
                                         forwarded_msg = await TelethonFileSender.send_file_with_name(
                                             client,
                                             target_entity,
-                                            watermarked_media,
-                                            modified_filename or "media_file.jpg",
+                                            media_to_send,
+                                            filename_to_send,
                                             caption=caption_text,
                                             silent=forwarding_settings['silent_notifications'],
                                             parse_mode='HTML' if caption_text else None,
@@ -922,16 +962,19 @@ class UserbotService:
                                         # Keep album grouped: send as new media (copy mode)
                                         logger.info(f"📸 إبقاء الألبوم مجمع للمهمة {task['id']} (وضع النسخ)")
                                         
-                                        # Apply watermark if enabled
-                                        watermarked_media, modified_filename = await self.apply_watermark_to_media(event, task['id'])
+                                        # ===== استخدام الوسائط المعالجة مسبقاً =====
+                                        # استخدام الوسائط التي تم معالجتها مرة واحدة بدلاً من معالجتها لكل هدف
+                                        # هذا يحسن الأداء ويقلل من استهلاك الموارد
+                                        media_to_send = processed_media if processed_media else event.message.media
+                                        filename_to_send = processed_filename if processed_filename else "media_file.jpg"
                                         
                                         # In copy mode, we always send as new media, not forward
                                         from send_file_helper import TelethonFileSender
                                         forwarded_msg = await TelethonFileSender.send_file_with_name(
                                             client,
                                             target_entity,
-                                            watermarked_media,
-                                            modified_filename or "media_file.jpg",
+                                            media_to_send,
+                                            filename_to_send,
                                             caption=caption_text,
                                             silent=forwarding_settings['silent_notifications'],
                                             parse_mode='HTML' if caption_text else None,
@@ -1024,16 +1067,19 @@ class UserbotService:
                                             # Split album: send each media individually
                                             logger.info(f"📸 تفكيك الألبوم: إرسال الوسائط بشكل منفصل للمهمة {task['id']}")
                                             
-                                            # Apply watermark if enabled
-                                            watermarked_media, modified_filename = await self.apply_watermark_to_media(event, task['id'])
+                                            # ===== استخدام الوسائط المعالجة مسبقاً =====
+                                            # استخدام الوسائط التي تم معالجتها مرة واحدة بدلاً من معالجتها لكل هدف
+                                            # هذا يحسن الأداء ويقلل من استهلاك الموارد
+                                            media_to_send = processed_media if processed_media else event.message.media
+                                            filename_to_send = processed_filename if processed_filename else "media_file.jpg"
                                             
                                             # استخدام مساعد إرسال الملفات للتعامل مع أسماء الملفات بشكل صحيح
                                             from send_file_helper import TelethonFileSender
                                             forwarded_msg = await TelethonFileSender.send_file_with_name(
                                                 client,
                                                 target_entity,
-                                                watermarked_media,
-                                                modified_filename or "media_file.jpg",
+                                                media_to_send,
+                                                filename_to_send,
                                                 caption=caption_text,
                                                 silent=forwarding_settings['silent_notifications'],
                                                 parse_mode='HTML' if caption_text else None,
@@ -1044,17 +1090,20 @@ class UserbotService:
                                             # Keep album grouped: send as new media (copy mode)
                                             logger.info(f"📸 إبقاء الألبوم مجمع للمهمة {task['id']} (تحويل لوضع النسخ)")
                                             
-                                            # Apply watermark if enabled
-                                            watermarked_media, modified_filename = await self.apply_watermark_to_media(event, task['id'])
-                                            logger.info(f"📁 سيتم إرسال الملف باسم: {modified_filename}")
+                                            # ===== استخدام الوسائط المعالجة مسبقاً =====
+                                            # استخدام الوسائط التي تم معالجتها مرة واحدة بدلاً من معالجتها لكل هدف
+                                            # هذا يحسن الأداء ويقلل من استهلاك الموارد
+                                            media_to_send = processed_media if processed_media else event.message.media
+                                            filename_to_send = processed_filename if processed_filename else "media_file.jpg"
+                                            logger.info(f"📁 سيتم إرسال الملف باسم: {filename_to_send}")
                                             
                                             # In forward mode with requires_copy_mode, we also send as new media
                                             from send_file_helper import TelethonFileSender
                                             forwarded_msg = await TelethonFileSender.send_file_with_name(
                                                 client,
                                                 target_entity,
-                                                watermarked_media,
-                                                modified_filename or "media_file.jpg",
+                                                media_to_send,
+                                                filename_to_send,
                                                 caption=caption_text,
                                                 silent=forwarding_settings['silent_notifications'],
                                                 parse_mode='HTML' if caption_text else None,
@@ -1120,19 +1169,22 @@ class UserbotService:
                                                 # Split album: send each media individually
                                                 logger.info(f"📸 تفكيك الألبوم: إرسال الوسائط بشكل منفصل للمهمة {task['id']}")
                                                 
-                                                # Apply watermark if enabled
-                                                watermarked_media, modified_filename = await self.apply_watermark_to_media(event, task['id'])
-                                                logger.info(f"📁 سيتم إرسال الملف باسم (تفكيك الألبوم): {modified_filename}")
+                                                # ===== استخدام الوسائط المعالجة مسبقاً =====
+                                                # استخدام الوسائط التي تم معالجتها مرة واحدة بدلاً من معالجتها لكل هدف
+                                                # هذا يحسن الأداء ويقلل من استهلاك الموارد
+                                                media_to_send = processed_media if processed_media else event.message.media
+                                                filename_to_send = processed_filename if processed_filename else "media_file.jpg"
+                                                logger.info(f"📁 سيتم إرسال الملف باسم (تفكيك الألبوم): {filename_to_send}")
                                                 
                                                 # For photos with watermarks, ensure they're sent as photos
-                                                if is_photo and watermarked_media != event.message.media:
+                                                if is_photo and media_to_send != event.message.media:
                                                     # Send watermarked photo as photo (not document)
                                                     from send_file_helper import TelethonFileSender
                                                     forwarded_msg = await TelethonFileSender.send_file_with_name(
                                                         client,
                                                         target_entity,
-                                                        watermarked_media,
-                                                        modified_filename or "photo.jpg",
+                                                        media_to_send,
+                                                        filename_to_send,
                                                         caption=caption_text,
                                                         silent=forwarding_settings['silent_notifications'],
                                                         force_document=False,
@@ -1144,8 +1196,8 @@ class UserbotService:
                                                     forwarded_msg = await TelethonFileSender.send_file_with_name(
                                                         client,
                                                         target_entity,
-                                                        watermarked_media,
-                                                        modified_filename or "media_file.jpg",
+                                                        media_to_send,
+                                                        filename_to_send,
                                                         caption=caption_text,
                                                         silent=forwarding_settings['silent_notifications'],
                                                         force_document=False,
@@ -1163,22 +1215,25 @@ class UserbotService:
                                                     )
                                                 else:
                                                     # Single media
-                                                    # Apply watermark if enabled
-                                                    watermarked_media, modified_filename = await self.apply_watermark_to_media(event, task['id'])
-                                                    logger.info(f"📁 سيتم إرسال الملف باسم (وضع التوجيه): {modified_filename}")
+                                                    # ===== استخدام الوسائط المعالجة مسبقاً =====
+                                                    # استخدام الوسائط التي تم معالجتها مرة واحدة بدلاً من معالجتها لكل هدف
+                                                    # هذا يحسن الأداء ويقلل من استهلاك الموارد
+                                                    media_to_send = processed_media if processed_media else event.message.media
+                                                    filename_to_send = processed_filename if processed_filename else "media_file.jpg"
+                                                    logger.info(f"📁 سيتم إرسال الملف باسم (وضع التوجيه): {filename_to_send}")
                                                     
                                                     # Determine media type for proper sending
                                                     is_photo = hasattr(event.message.media, 'photo') and event.message.media.photo is not None
                                                     
-                                                    if is_photo and watermarked_media != event.message.media:
-                                                        logger.info(f"📸 إرسال صورة مُعالجة كصورة: {modified_filename}")
+                                                    if is_photo and media_to_send != event.message.media:
+                                                        logger.info(f"📸 إرسال صورة مُعالجة كصورة: {filename_to_send}")
                                                         # Send watermarked photo as photo (not document)
                                                         from send_file_helper import TelethonFileSender
                                                         forwarded_msg = await TelethonFileSender.send_file_with_name(
                                                             client,
                                                             target_entity,
-                                                            watermarked_media,
-                                                            modified_filename or "photo.jpg",
+                                                            media_to_send,
+                                                            filename_to_send,
                                                             caption=caption_text,
                                                             silent=forwarding_settings['silent_notifications'],
                                                             force_document=False,
@@ -1190,8 +1245,8 @@ class UserbotService:
                                                         forwarded_msg = await TelethonFileSender.send_file_with_name(
                                                             client,
                                                             target_entity,
-                                                            watermarked_media,
-                                                            modified_filename or "media_file.jpg",
+                                                            media_to_send,
+                                                            filename_to_send,
                                                             caption=caption_text,
                                                             silent=forwarding_settings['silent_notifications'],
                                                             force_document=False,
@@ -1780,7 +1835,21 @@ class UserbotService:
             }
 
     async def apply_watermark_to_media(self, event, task_id: int):
-        """Apply watermark to media if enabled for the task"""
+        """
+        Apply watermark to media if enabled for the task - محسن لمعالجة الوسائط مرة واحدة
+        
+        التحسينات:
+        - معالجة الوسائط مرة واحدة وإعادة استخدامها لكل الأهداف
+        - ذاكرة مؤقتة ذكية لتحسين الأداء
+        - تحسين معالجة الفيديو وضغطه
+        - إرسال الفيديو بصيغة MP4
+        
+        Improvements:
+        - Process media once and reuse for all targets
+        - Smart cache for performance optimization
+        - Enhanced video processing and compression
+        - Send videos in MP4 format
+        """
         try:
             # Get watermark settings
             watermark_settings = self.db.get_watermark_settings(task_id)
@@ -1878,11 +1947,14 @@ class UserbotService:
             
             logger.info(f"🏷️ تطبيق العلامة المائية على {full_file_name} للمهمة {task_id}")
             
-            # Apply watermark
-            watermarked_media = self.watermark_processor.process_media_with_watermark(
+            # ===== تطبيق العلامة المائية باستخدام الوظيفة المحسنة =====
+            # استخدام الوظيفة الجديدة التي تعالج الوسائط مرة واحدة
+            # وتحفظها في الذاكرة المؤقتة لإعادة الاستخدام
+            watermarked_media = self.watermark_processor.process_media_once_for_all_targets(
                 media_bytes, 
                 full_file_name, 
-                watermark_settings
+                watermark_settings,
+                task_id
             )
             
             if watermarked_media and watermarked_media != media_bytes:
