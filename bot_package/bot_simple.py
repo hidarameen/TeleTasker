@@ -5675,28 +5675,56 @@ class SimpleTelegramBot:
 
     async def show_settings(self, event):
         """Show settings menu"""
-        user_id = event.sender_id
-        user_settings = self.db.get_user_settings(user_id)
-        
-        # Use translated button texts
-        buttons = [
-            [Button.inline(self.get_text("btn_change_language", user_id), "language_settings")],
-            [Button.inline(self.get_text("btn_change_timezone", user_id), "timezone_settings")],
-            [Button.inline(self.get_text("btn_check_userbot", user_id), "check_userbot")],
-            [Button.inline(self.get_text("btn_relogin", user_id), b"login")],
-            [Button.inline(self.get_text("btn_delete_all_tasks", user_id), "delete_all_tasks")],
-            [Button.inline(self.get_text("btn_back_to_main", user_id), "main_menu")]
-        ]
+        try:
+            user_id = event.sender_id
+            logger.info(f"📤 عرض قائمة الإعدادات للمستخدم: {user_id}")
+            
+            user_settings = self.db.get_user_settings(user_id)
+            logger.info(f"🔍 إعدادات المستخدم: {user_settings}")
+            
+            # Use translated button texts
+            buttons = [
+                [Button.inline(self.get_text("btn_change_language", user_id), "language_settings")],
+                [Button.inline(self.get_text("btn_change_timezone", user_id), "timezone_settings")],
+                [Button.inline(self.get_text("btn_check_userbot", user_id), "check_userbot")],
+                [Button.inline(self.get_text("btn_relogin", user_id), b"login")],
+                [Button.inline(self.get_text("btn_delete_all_tasks", user_id), "delete_all_tasks")],
+                [Button.inline(self.get_text("btn_back_to_main", user_id), "main_menu")]
+            ]
 
-        language_name = translations.get_language_name(user_settings['language'] if user_settings else 'ar')
-        timezone_name = user_settings['timezone'] if user_settings else 'Asia/Riyadh'
+            # Get user language safely
+            if user_settings and user_settings.get('language'):
+                user_language = user_settings['language']
+            else:
+                user_language = 'ar'
+                # Create default settings if they don't exist
+                self.db.update_user_language(user_id, 'ar')
+                
+            language_name = translations.get_language_name(user_language)
+            timezone_name = user_settings.get('timezone', 'Asia/Riyadh') if user_settings else 'Asia/Riyadh'
 
-        await event.edit(
-            self.get_text("settings_title", user_id, 
-                         language_name=language_name, 
-                         timezone=timezone_name),
-            buttons=buttons
-        )
+            logger.info(f"🌐 لغة المستخدم: {user_language}, اسم اللغة: {language_name}")
+
+            settings_text = self.get_text("settings_title", user_id, 
+                                        language_name=language_name, 
+                                        timezone=timezone_name)
+            
+            await event.edit(settings_text, buttons=buttons)
+            logger.info(f"✅ تم عرض قائمة الإعدادات بنجاح للمستخدم: {user_id}")
+            
+        except Exception as e:
+            logger.error(f"❌ خطأ في عرض قائمة الإعدادات للمستخدم {user_id}: {e}")
+            logger.error(f"Traceback: ", exc_info=True)
+            try:
+                await event.edit(
+                    "❌ حدث خطأ في تحميل الإعدادات. يرجى المحاولة مرة أخرى.",
+                    buttons=[[Button.inline("🔄 إعادة المحاولة", "settings")]]
+                )
+            except:
+                await event.respond(
+                    "❌ حدث خطأ في تحميل الإعدادات. يرجى المحاولة مرة أخرى.",
+                    buttons=[[Button.inline("🔄 إعادة المحاولة", "settings")]]
+                )
 
     async def check_userbot_status(self, event):
         """Check UserBot status for user"""
