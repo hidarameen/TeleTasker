@@ -3207,6 +3207,18 @@ class Database:
         """Get duplicate detection settings"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
+            
+            # First get the actual enabled status from advanced filters
+            cursor.execute('''
+                SELECT duplicate_filter_enabled 
+                FROM task_advanced_filters 
+                WHERE task_id = ?
+            ''', (task_id,))
+            
+            filter_enabled_result = cursor.fetchone()
+            is_filter_enabled = bool(filter_enabled_result['duplicate_filter_enabled']) if filter_enabled_result else False
+            
+            # Then get the duplicate settings
             cursor.execute('''
                 SELECT check_text_similarity, check_media_similarity, 
                        similarity_threshold, time_window_hours
@@ -3216,7 +3228,7 @@ class Database:
 
             if result:
                 return {
-                    'enabled': True,  # Add enabled field for consistency
+                    'enabled': is_filter_enabled,  # Use actual enabled status from advanced filters
                     'check_text': bool(result['check_text_similarity']),
                     'check_media': bool(result['check_media_similarity']),
                     'similarity_threshold': int(result['similarity_threshold'] * 100),  # Convert to percentage
@@ -3226,7 +3238,7 @@ class Database:
                 # Create default settings
                 self.create_default_duplicate_settings(task_id)
                 return {
-                    'enabled': False,  # Default to disabled
+                    'enabled': is_filter_enabled,  # Use actual enabled status from advanced filters
                     'check_text': True,
                     'check_media': True,
                     'similarity_threshold': 80,  # Percentage
