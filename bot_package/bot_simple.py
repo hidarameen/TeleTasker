@@ -5898,8 +5898,9 @@ class SimpleTelegramBot:
         
         if success:
             language_name = translations.get_language_name(language)
-            # Use new language for success message
-            await event.answer(translations.get_text("language_changed_success", language, language_name=language_name))
+            # Use new language for success message - need to temporarily update user settings first
+            success_msg = translations.get_text("language_changed_success", language, language_name=language_name)
+            await event.answer(success_msg)
         else:
             await event.answer(self.get_text("language_change_failed", user_id))
         
