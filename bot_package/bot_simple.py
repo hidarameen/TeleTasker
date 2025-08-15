@@ -7902,7 +7902,7 @@ class SimpleTelegramBot:
             f"⚠️ **ملاحظة**: يمكنك استخدام الرموز والإيموجي"
         )
         
-                await self.edit_or_send_message(event, message_text, buttons=buttons)
+        await self.edit_or_send_message(event, message_text, buttons=buttons)
 
     async def handle_set_header_text(self, event, task_id, text):
         """Handle setting header text"""
