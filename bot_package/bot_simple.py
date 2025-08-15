@@ -2079,7 +2079,7 @@ class SimpleTelegramBot:
             [Button.inline("🔙 رجوع للفلاتر المتقدمة", f"advanced_filters_{task_id}")]
         ]
         
-        await event.edit(
+        message_text = (
             f"🔄 فلتر التكرار - المهمة #{task_id}\n\n"
             f"📊 الحالة: {status_text}\n"
             f"📏 نسبة التشابه: {threshold}%\n"
@@ -2087,9 +2087,10 @@ class SimpleTelegramBot:
             f"📝 فحص النص: {'✅' if check_text else '❌'}\n"
             f"🎬 فحص الوسائط: {'✅' if check_media else '❌'}\n\n"
             f"💡 هذا الفلتر يمنع توجيه الرسائل المتكررة\n"
-            f"⏰ محدث: {timestamp}",
-            buttons=buttons
+            f"⏰ محدث: {timestamp}"
         )
+        
+        await self.edit_or_send_message(event, message_text, buttons=buttons)
 
     async def show_day_filters(self, event, task_id):
         """Show day filters settings"""
@@ -2140,14 +2141,15 @@ class SimpleTelegramBot:
         # Count selected days
         selected_days_count = sum(1 for df in day_filters if df['is_allowed'])
         
-        await event.edit(
+        message_text = (
             f"📅 فلتر الأيام - المهمة #{task_id}\n\n"
             f"📊 الحالة: {status_text}\n"
             f"📋 الأيام المحددة: {selected_days_count}/7\n\n"
             f"اختر الأيام المسموح بالتوجيه فيها:\n"
-            f"⏰ آخر تحديث: {timestamp}",
-            buttons=buttons
+            f"⏰ آخر تحديث: {timestamp}"
         )
+        
+        await self.edit_or_send_message(event, message_text, buttons=buttons)
 
     async def toggle_day_filter(self, event, task_id, day_number):
         """Toggle specific day filter"""
@@ -3063,14 +3065,15 @@ class SimpleTelegramBot:
             [Button.inline("🔙 رجوع للفلاتر المتقدمة", f"advanced_filters_{task_id}")]
         ]
         
-        await event.edit(
+        message_text = (
             f"⏰ **فلتر ساعات العمل** - المهمة #{task_id}\n\n"
             f"📊 **الحالة:** {status_text}\n"
             f"⚙️ **الوضع:** {mode_text}\n"
             f"🕐 **الساعات النشطة:** {active_hours}/24\n\n"
-            f"💡 **الوصف:** {mode_description}",
-            buttons=buttons
+            f"💡 **الوصف:** {mode_description}"
         )
+        
+        await self.edit_or_send_message(event, message_text, buttons=buttons)
 
     async def show_working_hours(self, event, task_id):
         """Show working hours schedule interface"""
@@ -3128,14 +3131,15 @@ class SimpleTelegramBot:
         import time
         timestamp = int(time.time()) % 100
         
-        await event.edit(
+        message_text = (
             f"🕐 **جدولة ساعات العمل** - المهمة #{task_id}\n\n"
             f"⚙️ **الوضع:** {'🏢 ساعات العمل' if mode == 'work_hours' else '😴 ساعات النوم'}\n\n"
             f"{description}\n\n"
             f"اضغط على الساعة لتبديل حالتها:\n"
-            f"⏰ آخر تحديث: {timestamp}",
-            buttons=buttons
+            f"⏰ آخر تحديث: {timestamp}"
         )
+        
+        await self.edit_or_send_message(event, message_text, buttons=buttons)
 
 
 
@@ -3280,15 +3284,18 @@ class SimpleTelegramBot:
         current_settings = self.db.get_duplicate_settings(task_id)
         current_threshold = current_settings.get('similarity_threshold', 80)
         
-        await event.edit(
+        message_text = (
             f"📏 تحديد نسبة التشابه - المهمة #{task_id}\n\n"
             f"📊 النسبة الحالية: {current_threshold}%\n\n"
             f"💡 أدخل نسبة التشابه المطلوبة (من 1 إلى 100):\n"
             f"• نسبة عالية (90-100%) = تطابق شبه تام\n"
             f"• نسبة متوسطة (60-89%) = تشابه كبير\n"
-            f"• نسبة منخفضة (1-59%) = تشابه بسيط",
-            buttons=[[Button.inline("❌ إلغاء", f"duplicate_settings_{task_id}")]]
+            f"• نسبة منخفضة (1-59%) = تشابه بسيط"
         )
+        
+        buttons = [[Button.inline("❌ إلغاء", f"duplicate_settings_{task_id}")]]
+        
+        await self.edit_or_send_message(event, message_text, buttons=buttons)
 
     async def start_set_duplicate_time(self, event, task_id):
         """Start setting duplicate time window conversation"""
@@ -3309,15 +3316,18 @@ class SimpleTelegramBot:
         current_settings = self.db.get_duplicate_settings(task_id)
         current_time = current_settings.get('time_window_hours', 24)
         
-        await event.edit(
+        message_text = (
             f"⏱️ تحديد النافذة الزمنية - المهمة #{task_id}\n\n"
             f"📊 النافذة الحالية: {current_time} ساعة\n\n"
             f"💡 أدخل النافذة الزمنية بالساعات (من 1 إلى 168):\n"
             f"• 1-6 ساعات = مراقبة قصيرة المدى\n"
             f"• 24 ساعة = مراقبة يومية (افتراضي)\n"
-            f"• 168 ساعة = مراقبة أسبوعية",
-            buttons=[[Button.inline("❌ إلغاء", f"duplicate_settings_{task_id}")]]
+            f"• 168 ساعة = مراقبة أسبوعية"
         )
+        
+        buttons = [[Button.inline("❌ إلغاء", f"duplicate_settings_{task_id}")]]
+        
+        await self.edit_or_send_message(event, message_text, buttons=buttons)
 
     async def show_language_filters(self, event, task_id):
         """Show language filter settings"""
@@ -3349,15 +3359,16 @@ class SimpleTelegramBot:
         import time
         timestamp = int(time.time()) % 100
         
-        await event.edit(
+        message_text = (
             f"🌍 فلتر اللغات - المهمة #{task_id}\n\n"
             f"📊 الحالة: {status_text}\n"
             f"🗣️ عدد اللغات: {len(languages)}\n"
             f"⚙️ الوضع: {mode_text}\n\n"
             f"💡 هذا الفلتر يتحكم في الرسائل حسب لغة النص\n"
-            f"⏰ آخر تحديث: {timestamp}",
-            buttons=buttons
+            f"⏰ آخر تحديث: {timestamp}"
         )
+        
+        await self.edit_or_send_message(event, message_text, buttons=buttons)
 
     async def show_language_management(self, event, task_id):
         """Show language management interface"""
@@ -3442,7 +3453,7 @@ class SimpleTelegramBot:
         ])
         
         try:
-            await event.edit(message, buttons=buttons)
+            await self.edit_or_send_message(event, message, buttons=buttons)
         except Exception as refresh_error:
             if "Content of the message was not modified" in str(refresh_error):
                 logger.debug("المحتوى لم يتغير، تجاهل الخطأ")
@@ -3520,7 +3531,7 @@ class SimpleTelegramBot:
         ])
         
         try:
-            await event.edit(message, buttons=buttons)
+            await self.edit_or_send_message(event, message, buttons=buttons)
         except Exception as refresh_error:
             if "Content of the message was not modified" in str(refresh_error):
                 logger.debug("المحتوى لم يتغير، تجاهل الخطأ")
@@ -3544,7 +3555,7 @@ class SimpleTelegramBot:
             [Button.inline("❌ إلغاء", f"manage_languages_{task_id}")]
         ]
 
-        await event.edit(
+        message_text = (
             f"➕ إضافة لغة جديدة - المهمة #{task_id}\n\n"
             f"📝 أرسل كود اللغة واسمها بالشكل التالي:\n\n"
             f"**أمثلة:**\n"
@@ -3554,9 +3565,10 @@ class SimpleTelegramBot:
             f"• `de Deutsch`\n\n"
             f"💡 **تنسيق الإدخال:**\n"
             f"`[كود اللغة] [اسم اللغة]`\n\n"
-            f"⚠️ **ملاحظة**: كود اللغة يجب أن يكون من 2-3 أحرف",
-            buttons=buttons
+            f"⚠️ **ملاحظة**: كود اللغة يجب أن يكون من 2-3 أحرف"
         )
+        
+        await self.edit_or_send_message(event, message_text, buttons=buttons)
 
     async def quick_add_language(self, event, task_id, language_code, language_name):
         """Quick add language from predefined list"""
@@ -3846,11 +3858,7 @@ class SimpleTelegramBot:
             f"اختر ما تريد فعله:"
         )
 
-        try:
-            await event.edit(message_text, buttons=buttons)
-        except Exception as e:
-            # If edit fails, send new message
-            await event.respond(message_text, buttons=buttons)
+        await self.edit_or_send_message(event, message_text, buttons=buttons)
 
     async def show_tasks_menu(self, event):
         """Show tasks management menu"""
@@ -3883,7 +3891,7 @@ class SimpleTelegramBot:
 
         # Check if user is authenticated
         if not self.db.is_user_authenticated(user_id):
-            await event.edit("❌ يجب تسجيل الدخول أولاً لإنشاء المهام")
+            await self.edit_or_send_message(event, "❌ يجب تسجيل الدخول أولاً لإنشاء المهام")
             return
 
         # Set conversation state
