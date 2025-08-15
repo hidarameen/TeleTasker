@@ -8,7 +8,6 @@ pillow>=11.3.0
 psycopg2-binary>=2.9.10
 python-telegram-bot==20.8
 telegram>=0.0.1
-telethon>=1.40.0
 # Telegram Bot Libraries
 python-telegram-bot==20.8
 telethon==1.36.0
