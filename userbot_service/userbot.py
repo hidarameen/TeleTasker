@@ -699,29 +699,21 @@ class UserbotService:
                 
                 album_collector = self.album_collectors[user_id]
 
-                # Check advanced filters before forwarding to any targets
-                message = event.message
-                should_block, should_remove_buttons, should_remove_forward = await self._check_message_advanced_filters(
-                    first_task['id'], message
-                )
-                
-                if should_block:
-                    logger.info(f"🚫 الرسالة محظورة بواسطة فلاتر متقدمة - تم رفضها لجميع الأهداف")
-                    return
-
-                # Check for duplicate message before forwarding
-                is_duplicate = await self._check_duplicate_message(first_task['id'], event.message)
-                if is_duplicate:
-                    logger.info(f"🔄 تم تجاهل رسالة مكررة للمهمة {first_task['id']}")
-                    return
-
-
-
                 # Forward message to all target chats
                 for i, task in enumerate(matching_tasks):
                     try:
                         target_chat_id = str(task['target_chat_id']).strip()
                         task_name = task.get('task_name', f"مهمة {task['id']}")
+
+                        # Check advanced filters for this specific task
+                        message = event.message
+                        should_block, should_remove_buttons, should_remove_forward = await self._check_message_advanced_filters(
+                            task['id'], message
+                        )
+                        
+                        if should_block:
+                            logger.info(f"🚫 الرسالة محظورة بواسطة فلاتر متقدمة للمهمة {task_name} - تجاهل هذه المهمة")
+                            continue
 
                         # Get task forward mode and forwarding settings
                         forward_mode = task.get('forward_mode', 'forward')
