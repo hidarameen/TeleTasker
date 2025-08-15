@@ -1,6 +1,16 @@
 """
-وحدة معالجة العلامة المائية للصور والفيديوهات
+وحدة معالجة العلامة المائية للصور والفيديوهات - الإصدار المحسن
 تدعم إضافة علامة مائية نصية أو صورة مع إعدادات مخصصة
+
+التحسينات الرئيسية:
+1. معالجة الوسائط مرة واحدة وإعادة استخدامها لكل الأهداف
+2. تحسين ضغط الفيديو مع الحفاظ على الجودة
+3. إرسال الفيديو بصيغة MP4
+4. ذاكرة مؤقتة ذكية لتحسين الأداء
+
+المتطلبات:
+- FFmpeg لتحسين الفيديو
+- OpenCV, Pillow, NumPy للمعالجة
 """
 import os
 import io
@@ -8,18 +18,23 @@ import logging
 from PIL import Image, ImageDraw, ImageFont, ImageColor
 import cv2
 import numpy as np
-from typing import Optional, Tuple, Union
+from typing import Optional, Tuple, Union, Dict, Any
 import tempfile
+import subprocess
+import json
 
 logger = logging.getLogger(__name__)
 
 class WatermarkProcessor:
-    """معالج العلامة المائية للصور والفيديوهات"""
+    """معالج العلامة المائية للصور والفيديوهات - محسن"""
     
     def __init__(self):
         """تهيئة معالج العلامة المائية"""
         self.supported_image_formats = ['.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.webp']
-        self.supported_video_formats = ['.mp4', '.avi', '.mov', '.mkv', '.wmv', '.flv']
+        self.supported_video_formats = ['.mp4', '.avi', '.mov', '.mkv', '.wmv', '.flv', '.webm']
+        
+        # Cache للملفات المعالجة مسبقاً
+        self.processed_media_cache = {}
         
     def calculate_position(self, base_size: Tuple[int, int], watermark_size: Tuple[int, int], position: str, offset_x: int = 0, offset_y: int = 0) -> Tuple[int, int]:
         """حساب موقع العلامة المائية على الصورة/الفيديو مع الإزاحة اليدوية"""
@@ -295,8 +310,106 @@ class WatermarkProcessor:
             logger.error(f"خطأ في تطبيق العلامة المائية على الصورة: {e}")
             return image_bytes
     
+    def get_video_info(self, video_path: str) -> Dict[str, Any]:
+        """الحصول على معلومات الفيديو باستخدام ffprobe"""
+        try:
+            cmd = [
+                'ffprobe', '-v', 'quiet', '-print_format', 'json',
+                '-show_format', '-show_streams', video_path
+            ]
+            
+            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+            info = json.loads(result.stdout)
+            
+            # استخراج المعلومات المهمة
+            video_stream = next((s for s in info['streams'] if s['codec_type'] == 'video'), None)
+            format_info = info['format']
+            
+            if video_stream:
+                return {
+                    'width': int(video_stream.get('width', 0)),
+                    'height': int(video_stream.get('height', 0)),
+                    'fps': eval(video_stream.get('r_frame_rate', '30/1')),
+                    'duration': float(format_info.get('duration', 0)),
+                    'bitrate': int(format_info.get('bit_rate', 0)),
+                    'size_mb': float(format_info.get('size', 0)) / (1024 * 1024),
+                    'codec': video_stream.get('codec_name', 'unknown')
+                }
+            
+            return {}
+            
+        except Exception as e:
+            logger.error(f"خطأ في الحصول على معلومات الفيديو: {e}")
+            return {}
+    
+    def optimize_video_compression(self, input_path: str, output_path: str, target_size_mb: float = None) -> bool:
+        """تحسين ضغط الفيديو مع الحفاظ على الجودة"""
+        try:
+            # الحصول على معلومات الفيديو الأصلي
+            video_info = self.get_video_info(input_path)
+            if not video_info:
+                logger.warning("فشل في الحصول على معلومات الفيديو، استخدام إعدادات افتراضية")
+                return False
+            
+            original_size = video_info.get('size_mb', 0)
+            original_bitrate = video_info.get('bitrate', 0)
+            
+            logger.info(f"📹 معلومات الفيديو الأصلي: {video_info['width']}x{video_info['height']}, "
+                       f"{video_info['fps']:.2f} FPS, {original_size:.2f} MB")
+            
+            # حساب معدل البت الأمثل
+            if target_size_mb and original_size > target_size_mb:
+                # حساب معدل البت المطلوب للوصول للحجم المطلوب
+                target_bitrate = int((target_size_mb * 8 * 1024 * 1024) / video_info['duration'])
+                target_bitrate = max(target_bitrate, 500000)  # حد أدنى 500 kbps
+            else:
+                # استخدام معدل البت الأصلي مع تحسين بسيط
+                target_bitrate = int(original_bitrate * 0.9)  # تقليل 10% للحفاظ على الجودة
+            
+            # إعدادات FFmpeg محسنة
+            cmd = [
+                'ffmpeg', '-i', input_path,
+                '-c:v', 'libx264',  # كودك H.264
+                '-preset', 'medium',  # توازن بين السرعة والجودة
+                '-crf', '23',  # جودة ثابتة (18-28 جيد، 23 مثالي)
+                '-maxrate', f'{target_bitrate}',
+                '-bufsize', f'{target_bitrate * 2}',
+                '-c:a', 'aac',  # كودك الصوت
+                '-b:a', '128k',  # معدل بت الصوت
+                '-movflags', '+faststart',  # تحسين التشغيل
+                '-y',  # استبدال الملف الموجود
+                output_path
+            ]
+            
+            logger.info(f"🎬 بدء تحسين الفيديو: معدل البت المستهدف {target_bitrate/1000:.0f} kbps")
+            
+            # تنفيذ الضغط
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            
+            if result.returncode == 0:
+                # التحقق من النتيجة
+                final_info = self.get_video_info(output_path)
+                if final_info:
+                    final_size = final_info.get('size_mb', 0)
+                    compression_ratio = (original_size - final_size) / original_size * 100
+                    
+                    logger.info(f"✅ تم تحسين الفيديو بنجاح: "
+                               f"{original_size:.2f} MB → {final_size:.2f} MB "
+                               f"(توفير {compression_ratio:.1f}%)")
+                    return True
+                else:
+                    logger.warning("تم إنشاء الفيديو ولكن فشل في التحقق من النتيجة")
+                    return True
+            else:
+                logger.error(f"فشل في تحسين الفيديو: {result.stderr}")
+                return False
+                
+        except Exception as e:
+            logger.error(f"خطأ في تحسين ضغط الفيديو: {e}")
+            return False
+    
     def apply_watermark_to_video(self, video_path: str, watermark_settings: dict) -> Optional[str]:
-        """تطبيق العلامة المائية على فيديو"""
+        """تطبيق العلامة المائية على فيديو مع تحسين الضغط"""
         try:
             # فتح الفيديو
             cap = cv2.VideoCapture(video_path)
@@ -312,11 +425,16 @@ class WatermarkProcessor:
             
             # إنشاء ملف مؤقت للفيديو الجديد
             temp_dir = tempfile.gettempdir()
-            output_path = os.path.join(temp_dir, f"watermarked_{os.path.basename(video_path)}")
+            temp_output = os.path.join(temp_dir, f"temp_watermarked_{os.path.basename(video_path)}")
+            final_output = os.path.join(temp_dir, f"watermarked_{os.path.basename(video_path)}")
+            
+            # تغيير امتداد الملف إلى MP4
+            if not final_output.endswith('.mp4'):
+                final_output = os.path.splitext(final_output)[0] + '.mp4'
             
             # إعداد كاتب الفيديو
             fourcc = cv2.VideoWriter.fourcc(*'mp4v')
-            out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
+            out = cv2.VideoWriter(temp_output, fourcc, fps, (width, height))
             
             # تحضير العلامة المائية
             watermark_img = None
@@ -390,8 +508,23 @@ class WatermarkProcessor:
             cap.release()
             out.release()
             
-            logger.info(f"تم تطبيق العلامة المائية على الفيديو: {output_path}")
-            return output_path
+            # تحسين ضغط الفيديو
+            logger.info("🎬 بدء تحسين ضغط الفيديو...")
+            if self.optimize_video_compression(temp_output, final_output):
+                # حذف الملف المؤقت
+                if os.path.exists(temp_output):
+                    os.unlink(temp_output)
+                
+                logger.info(f"✅ تم تطبيق العلامة المائية وتحسين الفيديو: {final_output}")
+                return final_output
+            else:
+                # في حالة فشل التحسين، استخدم الملف المؤقت
+                logger.warning("فشل في تحسين الفيديو، استخدام الملف المؤقت")
+                if os.path.exists(temp_output):
+                    os.rename(temp_output, final_output)
+                    return final_output
+                else:
+                    return video_path
             
         except Exception as e:
             logger.error(f"خطأ في تطبيق العلامة المائية على الفيديو: {e}")
@@ -465,3 +598,53 @@ class WatermarkProcessor:
         except Exception as e:
             logger.error(f"خطأ في معالجة الوسائط بالعلامة المائية: {e}")
             return media_bytes
+    
+    def process_media_once_for_all_targets(self, media_bytes: bytes, file_name: str, watermark_settings: dict, 
+                                         task_id: int) -> Optional[bytes]:
+        """معالجة الوسائط مرة واحدة وإعادة استخدامها لكل الأهداف"""
+        try:
+            # إنشاء مفتاح فريد للملف
+            cache_key = f"{task_id}_{hash(media_bytes)}_{file_name}"
+            
+            # التحقق من وجود الملف في الذاكرة المؤقتة
+            if cache_key in self.processed_media_cache:
+                logger.info(f"🔄 إعادة استخدام الوسائط المعالجة مسبقاً للمهمة {task_id}")
+                return self.processed_media_cache[cache_key]
+            
+            # معالجة الوسائط
+            processed_media = self.process_media_with_watermark(media_bytes, file_name, watermark_settings)
+            
+            if processed_media and processed_media != media_bytes:
+                # حفظ النتيجة في الذاكرة المؤقتة
+                self.processed_media_cache[cache_key] = processed_media
+                logger.info(f"✅ تم معالجة الوسائط وحفظها في الذاكرة المؤقتة للمهمة {task_id}")
+                
+                # تنظيف الذاكرة المؤقتة إذا أصبحت كبيرة جداً
+                if len(self.processed_media_cache) > 50:
+                    # حذف أقدم 10 عناصر
+                    oldest_keys = list(self.processed_media_cache.keys())[:10]
+                    for key in oldest_keys:
+                        del self.processed_media_cache[key]
+                    logger.info("🧹 تم تنظيف الذاكرة المؤقتة")
+                
+                return processed_media
+            else:
+                # إذا لم يتم تطبيق العلامة المائية، احفظ الملف الأصلي
+                self.processed_media_cache[cache_key] = media_bytes
+                return media_bytes
+                
+        except Exception as e:
+            logger.error(f"خطأ في معالجة الوسائط مرة واحدة: {e}")
+            return media_bytes
+    
+    def clear_cache(self):
+        """مسح الذاكرة المؤقتة"""
+        self.processed_media_cache.clear()
+        logger.info("🧹 تم مسح الذاكرة المؤقتة للعلامة المائية")
+    
+    def get_cache_stats(self):
+        """الحصول على إحصائيات الذاكرة المؤقتة"""
+        return {
+            'cache_size': len(self.processed_media_cache),
+            'cache_keys': list(self.processed_media_cache.keys())
+        }
