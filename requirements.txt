@@ -17,6 +17,8 @@ SQLAlchemy==2.0.34
 Pillow==10.4.0
 
 # Video Processing & Optimization
+# ملاحظة: ffmpeg-python هي مكتبة Python للتفاعل مع FFmpeg
+# FFmpeg نفسه يجب تثبيته كأداة نظام منفصلة
 ffmpeg-python>=0.2.0
 
 # Async Support
@@ -42,9 +44,13 @@ colorlog==6.8.2
 pytest==8.3.3
 pytest-asyncio==0.24.0
 
-# Additional Dependencies for Enhanced Features
-# These are optional but recommended for better performance
-# ffmpeg (system package) - for video optimization
-# sudo apt install ffmpeg (Ubuntu/Debian)
-# sudo yum install ffmpeg (CentOS/RHEL)
-# brew install ffmpeg (macOS)
+# ===== متطلبات النظام - System Requirements =====
+# 
+# FFmpeg (أداة نظام - system tool):
+# Ubuntu/Debian: sudo apt install ffmpeg
+# CentOS/RHEL: sudo yum install ffmpeg
+# Alpine: apk add ffmpeg
+# macOS: brew install ffmpeg
+#
+# بدون FFmpeg، البوت سيعمل باستخدام OpenCV كبديل
+# لكن الأداء سيكون أفضل مع FFmpeg

@@ -36,6 +36,27 @@ class WatermarkProcessor:
         # Cache للملفات المعالجة مسبقاً
         self.processed_media_cache = {}
         
+        # التحقق من توفر FFmpeg
+        self.ffmpeg_available = self._check_ffmpeg_availability()
+        
+        if self.ffmpeg_available:
+            logger.info("✅ FFmpeg متوفر - سيتم استخدامه لتحسين الفيديو")
+        else:
+            logger.warning("⚠️ FFmpeg غير متوفر - سيتم استخدام OpenCV كبديل")
+    
+    def _check_ffmpeg_availability(self) -> bool:
+        """التحقق من توفر FFmpeg في النظام"""
+        try:
+            # التحقق من توفر ffmpeg
+            result = subprocess.run(['ffmpeg', '-version'], capture_output=True, text=True)
+            if result.returncode == 0:
+                # التحقق من توفر ffprobe
+                result_probe = subprocess.run(['ffprobe', '-version'], capture_output=True, text=True)
+                return result_probe.returncode == 0
+            return False
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            return False
+    
     def calculate_position(self, base_size: Tuple[int, int], watermark_size: Tuple[int, int], position: str, offset_x: int = 0, offset_y: int = 0) -> Tuple[int, int]:
         """حساب موقع العلامة المائية على الصورة/الفيديو مع الإزاحة اليدوية"""
         base_width, base_height = base_size
@@ -311,8 +332,9 @@ class WatermarkProcessor:
             return image_bytes
     
     def get_video_info(self, video_path: str) -> Dict[str, Any]:
-        """الحصول على معلومات الفيديو باستخدام ffprobe"""
+        """الحصول على معلومات الفيديو باستخدام ffprobe أو OpenCV كبديل"""
         try:
+            # محاولة استخدام ffprobe أولاً
             cmd = [
                 'ffprobe', '-v', 'quiet', '-print_format', 'json',
                 '-show_format', '-show_streams', video_path
@@ -338,8 +360,49 @@ class WatermarkProcessor:
             
             return {}
             
+        except (subprocess.CalledProcessError, FileNotFoundError, json.JSONDecodeError) as e:
+            logger.warning(f"فشل في استخدام ffprobe: {e}")
+            
+            # استخدام OpenCV كبديل
+            try:
+                cap = cv2.VideoCapture(video_path)
+                if not cap.isOpened():
+                    logger.error(f"فشل في فتح الفيديو باستخدام OpenCV: {video_path}")
+                    return {}
+                
+                # الحصول على خصائص الفيديو
+                width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                height = int(cap.get(cv2.CAP_PROP_PROP_FRAME_HEIGHT))
+                fps = cap.get(cv2.CAP_PROP_FPS)
+                total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+                
+                # حساب المدة التقريبية
+                duration = total_frames / fps if fps > 0 else 0
+                
+                # الحصول على حجم الملف
+                file_size = os.path.getsize(video_path)
+                size_mb = file_size / (1024 * 1024)
+                
+                cap.release()
+                
+                logger.info(f"✅ تم الحصول على معلومات الفيديو باستخدام OpenCV: {width}x{height}, {fps:.2f} FPS, {size_mb:.2f} MB")
+                
+                return {
+                    'width': width,
+                    'height': height,
+                    'fps': fps,
+                    'duration': duration,
+                    'bitrate': int((file_size * 8) / duration) if duration > 0 else 0,
+                    'size_mb': size_mb,
+                    'codec': 'unknown'
+                }
+                
+            except Exception as opencv_error:
+                logger.error(f"فشل في الحصول على معلومات الفيديو باستخدام OpenCV: {opencv_error}")
+                return {}
+                
         except Exception as e:
-            logger.error(f"خطأ في الحصول على معلومات الفيديو: {e}")
+            logger.error(f"خطأ عام في الحصول على معلومات الفيديو: {e}")
             return {}
     
     def optimize_video_compression(self, input_path: str, output_path: str, target_size_mb: float = None) -> bool:
@@ -366,46 +429,192 @@ class WatermarkProcessor:
                 # استخدام معدل البت الأصلي مع تحسين بسيط
                 target_bitrate = int(original_bitrate * 0.9)  # تقليل 10% للحفاظ على الجودة
             
-            # إعدادات FFmpeg محسنة
-            cmd = [
-                'ffmpeg', '-i', input_path,
-                '-c:v', 'libx264',  # كودك H.264
-                '-preset', 'medium',  # توازن بين السرعة والجودة
-                '-crf', '23',  # جودة ثابتة (18-28 جيد، 23 مثالي)
-                '-maxrate', f'{target_bitrate}',
-                '-bufsize', f'{target_bitrate * 2}',
-                '-c:a', 'aac',  # كودك الصوت
-                '-b:a', '128k',  # معدل بت الصوت
-                '-movflags', '+faststart',  # تحسين التشغيل
-                '-y',  # استبدال الملف الموجود
-                output_path
-            ]
-            
-            logger.info(f"🎬 بدء تحسين الفيديو: معدل البت المستهدف {target_bitrate/1000:.0f} kbps")
-            
-            # تنفيذ الضغط
-            result = subprocess.run(cmd, capture_output=True, text=True)
-            
-            if result.returncode == 0:
-                # التحقق من النتيجة
-                final_info = self.get_video_info(output_path)
-                if final_info:
-                    final_size = final_info.get('size_mb', 0)
-                    compression_ratio = (original_size - final_size) / original_size * 100
+            # استخدام FFmpeg إذا كان متوفراً
+            if self.ffmpeg_available:
+                try:
+                    # إعدادات FFmpeg محسنة
+                    cmd = [
+                        'ffmpeg', '-i', input_path,
+                        '-c:v', 'libx264',  # كودك H.264
+                        '-preset', 'medium',  # توازن بين السرعة والجودة
+                        '-crf', '23',  # جودة ثابتة (18-28 جيد، 23 مثالي)
+                        '-maxrate', f'{target_bitrate}',
+                        '-bufsize', f'{target_bitrate * 2}',
+                        '-c:a', 'aac',  # كودك الصوت
+                        '-b:a', '128k',  # معدل بت الصوت
+                        '-movflags', '+faststart',  # تحسين التشغيل
+                        '-y',  # استبدال الملف الموجود
+                        output_path
+                    ]
                     
-                    logger.info(f"✅ تم تحسين الفيديو بنجاح: "
-                               f"{original_size:.2f} MB → {final_size:.2f} MB "
-                               f"(توفير {compression_ratio:.1f}%)")
+                    logger.info(f"🎬 بدء تحسين الفيديو باستخدام FFmpeg: معدل البت المستهدف {target_bitrate/1000:.0f} kbps")
+                    
+                    # تنفيذ الضغط
+                    result = subprocess.run(cmd, capture_output=True, text=True)
+                    
+                    if result.returncode == 0:
+                        # التحقق من النتيجة
+                        final_info = self.get_video_info(output_path)
+                        if final_info:
+                            final_size = final_info.get('size_mb', 0)
+                            compression_ratio = (original_size - final_size) / original_size * 100
+                            
+                            logger.info(f"✅ تم تحسين الفيديو بنجاح باستخدام FFmpeg: "
+                                       f"{original_size:.2f} MB → {final_size:.2f} MB "
+                                       f"(توفير {compression_ratio:.1f}%)")
+                            return True
+                        else:
+                            logger.warning("تم إنشاء الفيديو ولكن فشل في التحقق من النتيجة")
+                            return True
+                    else:
+                        logger.warning(f"فشل في استخدام FFmpeg: {result.stderr}")
+                        # الانتقال إلى الطريقة البديلة
+                        raise Exception("FFmpeg فشل في التنفيذ")
+                        
+                except Exception as ffmpeg_error:
+                    logger.warning(f"فشل في استخدام FFmpeg: {ffmpeg_error}")
+                    # الانتقال إلى الطريقة البديلة
+            
+            # استخدام OpenCV كبديل لضغط بسيط
+            try:
+                logger.info("🔄 استخدام OpenCV كبديل لضغط الفيديو...")
+                
+                # محاولة استخدام OpenCV لمعالجة الفيديو
+                if self.optimize_video_with_opencv(input_path, output_path, target_size_mb):
+                    logger.info("✅ تم معالجة الفيديو بنجاح باستخدام OpenCV")
                     return True
                 else:
-                    logger.warning("تم إنشاء الفيديو ولكن فشل في التحقق من النتيجة")
+                    # إذا فشل OpenCV، استخدم النسخ البسيط
+                    logger.warning("فشل في معالجة الفيديو باستخدام OpenCV، استخدام النسخ البسيط")
+                    import shutil
+                    shutil.copy2(input_path, output_path)
+                    
+                    logger.info(f"✅ تم نسخ الفيديو إلى {output_path} (بدون ضغط إضافي)")
+                    if not self.ffmpeg_available:
+                        logger.info("💡 للحصول على ضغط أفضل، قم بتثبيت FFmpeg")
+                    else:
+                        logger.info("💡 FFmpeg متوفر ولكن فشل في التنفيذ، تم استخدام النسخ البسيط")
+                    
                     return True
-            else:
-                logger.error(f"فشل في تحسين الفيديو: {result.stderr}")
+                
+            except Exception as opencv_error:
+                logger.error(f"فشل في استخدام OpenCV كبديل: {opencv_error}")
                 return False
                 
         except Exception as e:
             logger.error(f"خطأ في تحسين ضغط الفيديو: {e}")
+            return False
+    
+    def optimize_video_with_opencv(self, input_path: str, output_path: str, target_size_mb: float = None) -> bool:
+        """تحسين الفيديو باستخدام OpenCV كبديل لـ FFmpeg"""
+        try:
+            # فتح الفيديو
+            cap = cv2.VideoCapture(input_path)
+            if not cap.isOpened():
+                logger.error(f"فشل في فتح الفيديو: {input_path}")
+                return False
+            
+            # الحصول على خصائص الفيديو
+            fps = int(cap.get(cv2.CAP_PROP_FPS))
+            width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            
+            # حساب معدل البت المستهدف
+            original_size = os.path.getsize(input_path) / (1024 * 1024)  # MB
+            duration = total_frames / fps if fps > 0 else 0
+            
+            # تحديد معاملات التحسين بناءً على الحجم المستهدف
+            scale_factor = 1.0
+            fps_factor = 1.0
+            
+            if target_size_mb and original_size > target_size_mb:
+                # حساب معامل التصغير المطلوب
+                target_ratio = target_size_mb / original_size
+                
+                if target_ratio < 0.5:
+                    # تقليل كبير - تقليل الدقة ومعدل الإطارات
+                    scale_factor = 0.7
+                    fps_factor = 0.75
+                elif target_ratio < 0.8:
+                    # تقليل متوسط - تقليل الدقة قليلاً
+                    scale_factor = 0.85
+                    fps_factor = 0.9
+                else:
+                    # تقليل بسيط - تقليل الدقة قليلاً جداً
+                    scale_factor = 0.95
+                    fps_factor = 0.95
+                
+                new_width = int(width * scale_factor)
+                new_height = int(height * scale_factor)
+                new_fps = int(fps * fps_factor)
+                
+                logger.info(f"🔄 تحسين الفيديو: الدقة {width}x{height} → {new_width}x{new_height}, "
+                           f"معدل الإطارات {fps} → {new_fps}")
+            else:
+                new_width, new_height = width, height
+                new_fps = fps
+            
+            # إعداد كاتب الفيديو
+            fourcc = cv2.VideoWriter.fourcc(*'mp4v')
+            out = cv2.VideoWriter(output_path, fourcc, new_fps, (new_width, new_height))
+            
+            if not out.isOpened():
+                logger.error("فشل في إنشاء كاتب الفيديو")
+                cap.release()
+                return False
+            
+            logger.info(f"🎬 بدء معالجة الفيديو باستخدام OpenCV: {total_frames} إطار")
+            
+            frame_count = 0
+            skip_frames = 1
+            
+            # حساب عدد الإطارات التي يجب تخطيها للحصول على معدل الإطارات المطلوب
+            if new_fps < fps:
+                skip_frames = int(fps / new_fps)
+                logger.info(f"⏭️ تخطي {skip_frames - 1} إطار من كل {skip_frames} إطار")
+            
+            while True:
+                ret, frame = cap.read()
+                if not ret:
+                    break
+                
+                # تخطي الإطارات إذا لزم الأمر
+                if frame_count % skip_frames != 0:
+                    frame_count += 1
+                    continue
+                
+                # تغيير حجم الإطار إذا لزم الأمر
+                if new_width != width or new_height != height:
+                    frame = cv2.resize(frame, (new_width, new_height), interpolation=cv2.INTER_LANCZOS4)
+                
+                # كتابة الإطار
+                out.write(frame)
+                
+                frame_count += 1
+                if frame_count % 100 == 0:
+                    progress = (frame_count / total_frames) * 100
+                    logger.info(f"معالجة الفيديو: {progress:.1f}% ({frame_count}/{total_frames})")
+            
+            # إغلاق الموارد
+            cap.release()
+            out.release()
+            
+            # التحقق من النتيجة
+            if os.path.exists(output_path):
+                final_size = os.path.getsize(output_path) / (1024 * 1024)
+                compression_ratio = (original_size - final_size) / original_size * 100
+                
+                logger.info(f"✅ تم معالجة الفيديو بنجاح باستخدام OpenCV: "
+                           f"{original_size:.2f} MB → {final_size:.2f} MB "
+                           f"(توفير {compression_ratio:.1f}%)")
+                return True
+            else:
+                logger.error("فشل في إنشاء ملف الفيديو")
+                return False
+                
+        except Exception as e:
+            logger.error(f"خطأ في معالجة الفيديو باستخدام OpenCV: {e}")
             return False
     
     def apply_watermark_to_video(self, video_path: str, watermark_settings: dict) -> Optional[str]:
