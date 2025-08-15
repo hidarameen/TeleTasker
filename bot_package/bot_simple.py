@@ -2347,7 +2347,7 @@ class SimpleTelegramBot:
                         return
                 except Exception as e:
                     logger.error(f"خطأ في معالجة إدخال نص العلامة المائية: {e}")
-                    await event.respond("❌ حدث خطأ، يرجى المحاولة مرة أخرى")
+                    await self.edit_or_send_message(event, "❌ حدث خطأ، يرجى المحاولة مرة أخرى")
                     self.clear_user_state(user_id)
                     return
                     
@@ -2359,7 +2359,7 @@ class SimpleTelegramBot:
                         return
                 except Exception as e:
                     logger.error(f"خطأ في معالجة إدخال صورة العلامة المائية: {e}")
-                    await event.respond("❌ حدث خطأ، يرجى المحاولة مرة أخرى")
+                    await self.edit_or_send_message(event, "❌ حدث خطأ، يرجى المحاولة مرة أخرى")
                     self.clear_user_state(user_id)
                     return
                     
@@ -2476,10 +2476,11 @@ class SimpleTelegramBot:
                     await self.handle_add_source_target(event, state_data)
                 except Exception as e:
                     logger.error(f"خطأ في معالجة إضافة مصدر/هدف للمستخدم {user_id}: {e}")
-                    await event.respond(
+                    message_text = (
                         "❌ حدث خطأ أثناء إضافة المصدر/الهدف\n\n"
                         "حاول مرة أخرى أو اضغط /start للعودة للقائمة الرئيسية"
                     )
+                    await self.edit_or_send_message(event, message_text)
                     self.db.clear_conversation_state(user_id)
                 return
             elif state == 'adding_multiple_words': # Handle adding multiple words state
@@ -2499,7 +2500,7 @@ class SimpleTelegramBot:
                         await self.handle_watermark_text_input(event, task_id)
                 except Exception as e:
                     logger.error(f"خطأ في معالجة إدخال نص العلامة المائية: {e}")
-                    await event.respond("❌ حدث خطأ، يرجى المحاولة مرة أخرى")
+                    await self.edit_or_send_message(event, "❌ حدث خطأ، يرجى المحاولة مرة أخرى")
                     self.clear_user_state(user_id)
                 return
             elif state.startswith('watermark_image_input_'): # Handle watermark image input
@@ -2513,7 +2514,7 @@ class SimpleTelegramBot:
                         await self.handle_watermark_image_input(event, task_id)
                 except Exception as e:
                     logger.error(f"خطأ في معالجة إدخال صورة العلامة المائية: {e}")
-                    await event.respond("❌ حدث خطأ، يرجى المحاولة مرة أخرى")
+                    await self.edit_or_send_message(event, "❌ حدث خطأ، يرجى المحاولة مرة أخرى")
                     self.clear_user_state(user_id)
                 return
             elif state == 'waiting_watermark_size': # Handle setting watermark size
@@ -2676,7 +2677,7 @@ class SimpleTelegramBot:
 
         # Default response only if not a target chat and not forwarded and in private chat
         if event.is_private:
-            await event.respond("👋 أهلاً! استخدم /start لعرض القائمة الرئيسية")
+            await self.edit_or_send_message(event, "👋 أهلاً! استخدم /start لعرض القائمة الرئيسية")
         else:
             logger.info(f"🚫 تجاهل الرد التلقائي في محادثة غير خاصة: {event.chat_id}")
 
@@ -4202,7 +4203,7 @@ class SimpleTelegramBot:
                 await self.handle_password_input(event, message_text, data)
         except Exception as e:
             logger.error(f"خطأ في معالجة رسالة المحادثة: {e}")
-            await event.respond("❌ حدث خطأ، حاول مرة أخرى")
+            await self.edit_or_send_message(event, "❌ حدث خطأ، حاول مرة أخرى")
             self.db.clear_conversation_state(user_id)
 
     async def handle_add_source_target(self, event, state_data):
@@ -4234,13 +4235,14 @@ class SimpleTelegramBot:
         logger.info(f"   Chat input: {chat_input}")
 
         if not task_id or not action:
-            await event.respond(
+            message_text = (
                 "❌ خطأ في البيانات، حاول مرة أخرى\n\n"
                 f"🔍 تفاصيل المشكلة:\n"
                 f"• معرف المهمة: {task_id}\n"
                 f"• الإجراء: {action}\n"
                 f"• الحالة: {state}"
             )
+            await self.edit_or_send_message(event, message_text)
             self.db.clear_conversation_state(user_id)
             return
 
@@ -4251,7 +4253,7 @@ class SimpleTelegramBot:
         chat_ids, chat_names = self.parse_chat_input(chat_input)
 
         if not chat_ids:
-            await event.respond(
+            message_text = (
                 "❌ تنسيق معرف المجموعة/القناة غير صحيح\n\n"
                 "استخدم أحد الأشكال التالية:\n"
                 "• @channelname\n"
@@ -4259,6 +4261,7 @@ class SimpleTelegramBot:
                 "• -1001234567890\n\n"
                 "لعدة معرفات، افصل بينها بفاصلة: @channel1, @channel2"
             )
+            await self.edit_or_send_message(event, message_text)
             return
 
         # Add each chat
@@ -4299,7 +4302,7 @@ class SimpleTelegramBot:
             except Exception as e:
                 logger.error(f"خطأ في تحديث مهام UserBot: {e}")
 
-            await event.respond(f"✅ تم إضافة {added_count} {plural} بنجاح!")
+            await self.edit_or_send_message(event, f"✅ تم إضافة {added_count} {plural} بنجاح!")
 
             # Return to appropriate management menu
             if action == 'add_source':
@@ -4307,7 +4310,7 @@ class SimpleTelegramBot:
             else:
                 await self.manage_task_targets(event, task_id)
         else:
-            await event.respond("❌ فشل في إضافة المدخلات")
+            await self.edit_or_send_message(event, "❌ فشل في إضافة المدخلات")
 
     async def handle_task_name(self, event, task_name):
         """Handle task name input"""
@@ -4340,7 +4343,7 @@ class SimpleTelegramBot:
             [Button.inline("❌ إلغاء", b"manage_tasks")]
         ]
 
-        await event.respond(
+        message_text = (
             f"✅ اسم المهمة: {task_name}\n\n"
             f"📥 **الخطوة 2: تحديد المصادر**\n\n"
             f"أرسل معرفات أو روابط المجموعات/القنوات المصدر:\n\n"
@@ -4351,9 +4354,9 @@ class SimpleTelegramBot:
             f"🔹 **لعدة مصادر (مفصولة بفاصلة):**\n"
             f"• @channel1, @channel2, @channel3\n"
             f"• -1001234567890, -1001234567891\n\n"
-            f"⚠️ تأكد من أن البوت مضاف لجميع المجموعات/القنوات وله صلاحيات قراءة الرسائل",
-            buttons=buttons
+            f"⚠️ تأكد من أن البوت مضاف لجميع المجموعات/القنوات وله صلاحيات قراءة الرسائل"
         )
+        await self.edit_or_send_message(event, message_text, buttons=buttons)
 
     async def handle_source_chat(self, event, chat_input):
         """Handle source chat input using database conversation state"""
@@ -4363,7 +4366,7 @@ class SimpleTelegramBot:
         source_chat_ids, source_chat_names = self.parse_chat_input(chat_input)
 
         if not source_chat_ids:
-            await event.respond(
+            message_text = (
                 "❌ تنسيق معرفات المجموعات/القنوات غير صحيح\n\n"
                 "استخدم أحد الأشكال التالية:\n"
                 "• @channelname\n"
@@ -4371,6 +4374,7 @@ class SimpleTelegramBot:
                 "• -1001234567890\n\n"
                 "لعدة مصادر، افصل بينها بفاصلة: @channel1, @channel2"
             )
+            await self.edit_or_send_message(event, message_text)
             return
 
         # Get existing task data (task name) from previous step
@@ -4396,7 +4400,7 @@ class SimpleTelegramBot:
             [Button.inline("❌ إلغاء", b"manage_tasks")]
         ]
 
-        await event.respond(
+        message_text = (
             f"✅ تم تحديد المصادر: {', '.join([str(name) for name in source_chat_names if name])}\n\n"
             f"📤 **الخطوة 3: تحديد الوجهة**\n\n"
             f"أرسل معرف أو رابط المجموعة/القناة المراد توجيه الرسائل إليها:\n\n"
@@ -4404,9 +4408,9 @@ class SimpleTelegramBot:
             f"• @targetchannel\n"
             f"• https://t.me/targetchannel\n"
             f"• -1001234567890\n\n"
-            f"⚠️ تأكد من أن البوت مضاف للمجموعة/القناة وله صلاحيات إرسال الرسائل",
-            buttons=buttons
+            f"⚠️ تأكد من أن البوت مضاف للمجموعة/القناة وله صلاحيات إرسال الرسائل"
         )
+        await self.edit_or_send_message(event, message_text, buttons=buttons)
 
     async def handle_target_chat(self, event, chat_input):
         """Handle target chat input using database conversation state"""
@@ -4416,7 +4420,7 @@ class SimpleTelegramBot:
         target_chat_ids, target_chat_names = self.parse_chat_input(chat_input)
 
         if not target_chat_ids:
-            await event.respond(
+            message_text = (
                 "❌ تنسيق معرفات المجموعات/القنوات غير صحيح\n\n"
                 "استخدم أحد الأشكال التالية:\n"
                 "• @channelname\n"
@@ -4424,12 +4428,13 @@ class SimpleTelegramBot:
                 "• -1001234567890\n\n"
                 "لعدة أهداف، افصل بينها بفاصلة: @channel1, @channel2"
             )
+            await self.edit_or_send_message(event, message_text)
             return
 
         # Get source chat data from database
         state_data = self.db.get_conversation_state(user_id)
         if not state_data:
-            await event.respond("❌ حدث خطأ، يرجى البدء من جديد")
+            await self.edit_or_send_message(event, "❌ حدث خطأ، يرجى البدء من جديد")
             return
 
         state, data_str = state_data
@@ -4458,10 +4463,10 @@ class SimpleTelegramBot:
                 # Ensure all source_chat_ids are strings
                 source_chat_ids = [str(chat_id) for chat_id in source_chat_ids]
             except:
-                await event.respond("❌ حدث خطأ في البيانات، يرجى البدء من جديد")
+                await self.edit_or_send_message(event, "❌ حدث خطأ في البيانات، يرجى البدء من جديد")
                 return
         else:
-            await event.respond("❌ لم يتم تحديد المصدر، يرجى البدء من جديد")
+            await self.edit_or_send_message(event, "❌ لم يتم تحديد المصدر، يرجى البدء من جديد")
             return
 
         # Create task in database with multiple sources and targets
@@ -4515,16 +4520,16 @@ class SimpleTelegramBot:
             [Button.inline("🏠 القائمة الرئيسية", b"back_main")]
         ]
 
-        await event.respond(
+        message_text = (
             f"🎉 تم إنشاء المهمة بنجاح!\n\n"
             f"🆔 رقم المهمة: #{task_id}\n"
             f"🏷️ اسم المهمة: {task_name}\n"
             f"📥 المصادر: {', '.join([str(name) for name in (source_chat_names or source_chat_ids)])}\n"
             f"📤 الوجهة: {target_chat_name}\n"
             f"🟢 الحالة: نشطة\n\n"
-            f"✅ سيتم توجيه جميع الرسائل الجديدة تلقائياً",
-            buttons=buttons
+            f"✅ سيتم توجيه جميع الرسائل الجديدة تلقائياً"
         )
+        await self.edit_or_send_message(event, message_text, buttons=buttons)
 
     def parse_chat_input(self, chat_input: str) -> tuple:
         """Parse chat input and return chat_ids and names"""
@@ -5239,10 +5244,11 @@ class SimpleTelegramBot:
                 await self.handle_password_input(event, message_text, data)
         except Exception as e:
             logger.error(f"خطأ في التسجيل للمستخدم {user_id}: {e}")
-            await event.respond(
+            message_text = (
                 "❌ حدث خطأ أثناء التسجيل. حاول مرة أخرى.\n"
                 "اضغط /start للبدء من جديد."
             )
+            await self.edit_or_send_message(event, message_text)
             self.db.clear_conversation_state(user_id)
 
     async def handle_phone_input(self, event, phone: str):
@@ -5255,13 +5261,13 @@ class SimpleTelegramBot:
                 [Button.inline("❌ إلغاء", b"cancel_auth")]
             ]
 
-            await event.respond(
+            message_text = (
                 "❌ تنسيق رقم الهاتف غير صحيح\n\n"
                 "📞 يجب أن يبدأ الرقم بـ + ويكون بالتنسيق الدولي\n"
                 "مثال: +966501234567\n\n"
-                "أرسل رقم الهاتف مرة أخرى:",
-                buttons=buttons
+                "أرسل رقم الهاتف مرة أخرى:"
             )
+            await self.edit_or_send_message(event, message_text, buttons=buttons)
             return
 
         # Create temporary Telegram client for authentication
@@ -5295,21 +5301,22 @@ class SimpleTelegramBot:
                 [Button.inline("❌ إلغاء", b"cancel_auth")]
             ]
 
-            await event.respond(
+            message_text = (
                 f"✅ تم إرسال رمز التحقق إلى {phone}\n\n"
                 f"🔢 أرسل الرمز المكون من 5 أرقام:\n"
                 f"• يمكن إضافة حروف لتجنب حظر تليجرام: aa12345\n"
                 f"• أو إرسال الأرقام مباشرة: 12345\n\n"
-                f"⏰ انتظر بضع ثواني حتى يصل الرمز",
-                buttons=buttons
+                f"⏰ انتظر بضع ثواني حتى يصل الرمز"
             )
+            await self.edit_or_send_message(event, message_text, buttons=buttons)
 
         except asyncio.TimeoutError:
             logger.error("مهلة زمنية في إرسال الرمز")
-            await event.respond(
+            message_text = (
                 "❌ مهلة زمنية في الاتصال\n\n"
                 "🌐 تأكد من اتصالك بالإنترنت وحاول مرة أخرى"
             )
+            await self.edit_or_send_message(event, message_text)
             self.db.clear_conversation_state(user_id)
         except Exception as e:
             logger.error(f"خطأ في إرسال الرمز: {e}")
@@ -5329,7 +5336,7 @@ class SimpleTelegramBot:
                     else:
                         time_str = f"{wait_seconds} ثانية"
 
-                    await event.respond(
+                    message_text = (
                         "⏰ تم طلب رموز كثيرة من تليجرام\n\n"
                         f"🚫 يجب الانتظار: {time_str}\n\n"
                         f"💡 نصائح لتجنب هذه المشكلة:\n"
@@ -5338,21 +5345,24 @@ class SimpleTelegramBot:
                         f"• انتظر وصول الرمز قبل طلب آخر\n\n"
                         f"حاول مرة أخرى بعد انتهاء فترة الانتظار"
                     )
+                    await self.edit_or_send_message(event, message_text)
                 except:
-                    await event.respond(
+                    message_text = (
                         "⏰ تم طلب رموز كثيرة من تليجرام\n\n"
                         "يجب الانتظار قبل طلب رمز جديد\n"
                         "حاول مرة أخرى بعد فترة"
                     )
+                    await self.edit_or_send_message(event, message_text)
             elif "AuthRestartError" in error_message or "Restart the authorization" in error_message:
-                await event.respond(
+                message_text = (
                     "🔄 خطأ في الاتصال مع تليجرام\n\n"
                     "حاول تسجيل الدخول مرة أخرى\n"
                     "اضغط /start للبدء من جديد"
                 )
+                await self.edit_or_send_message(event, message_text)
                 self.db.clear_conversation_state(user_id)
             else:
-                await event.respond(
+                message_text = (
                     "❌ حدث خطأ في إرسال رمز التحقق\n\n"
                     "🔍 تحقق من:\n"
                     "• رقم الهاتف صحيح ومُفعل\n"
@@ -5360,6 +5370,7 @@ class SimpleTelegramBot:
                     "• لم تطلب رموز كثيرة مؤخراً\n\n"
                     "حاول مرة أخرى أو اضغط /start"
                 )
+                await self.edit_or_send_message(event, message_text)
         finally:
             # Always disconnect the temporary client
             if temp_client and temp_client.is_connected():
@@ -5377,12 +5388,13 @@ class SimpleTelegramBot:
 
         # Validate extracted code
         if len(extracted_code) != 5:
-            await event.respond(
+            message_text = (
                 "❌ تنسيق الرمز غير صحيح\n\n"
                 "🔢 أرسل الرمز المكون من 5 أرقام\n"
                 "يمكن إضافة حروف لتجنب الحظر مثل: aa12345\n"
                 "أو إرسال الأرقام مباشرة: 12345"
             )
+            await self.edit_or_send_message(event, message_text)
             return
 
         # Use the extracted code
@@ -5435,30 +5447,32 @@ class SimpleTelegramBot:
                         [Button.inline("❌ إلغاء", b"cancel_auth")]
                     ]
 
-                    await event.respond(
+                    message_text = (
                         "🔐 التحقق الثنائي مفعل على حسابك\n\n"
                         "🗝️ أرسل كلمة المرور الخاصة بالتحقق الثنائي:\n\n"
-                        "💡 هذه هي كلمة المرور التي أنشأتها عند تفعيل التحقق بخطوتين في تليجرام",
-                        buttons=buttons
+                        "💡 هذه هي كلمة المرور التي أنشأتها عند تفعيل التحقق بخطوتين في تليجرام"
                     )
+                    await self.edit_or_send_message(event, message_text, buttons=buttons)
                     
                     # Don't disconnect the client yet, we need it for password verification
                     return
                 else:
                     # Other error, disconnect and report
                     await temp_client.disconnect()
-                    await event.respond(
+                    message_text = (
                         "❌ الرمز غير صحيح أو منتهي الصلاحية\n\n"
                         "🔢 أرسل الرمز الصحيح أو اطلب رمز جديد"
                     )
+                    await self.edit_or_send_message(event, message_text)
                     return
 
         except Exception as e:
             logger.error(f"خطأ في التحقق من الرمز: {e}")
-            await event.respond(
+            message_text = (
                 "❌ الرمز غير صحيح أو منتهي الصلاحية\n\n"
                 "🔢 أرسل الرمز الصحيح أو اطلب رمز جديد"
             )
+            await self.edit_or_send_message(event, message_text)
 
     async def handle_password_input(self, event, password: str, data: str):
         """Handle 2FA password input"""
@@ -5514,22 +5528,23 @@ class SimpleTelegramBot:
                 [Button.inline("🏠 القائمة الرئيسية", b"back_main")]
             ]
 
-            await event.respond(
+            message_text = (
                 f"🎉 تم تسجيل الدخول بنجاح!\n\n"
                 f"👋 مرحباً {result.first_name}!\n"
                 f"✅ تم ربط حسابك بنجاح\n"
                 f"{session_saved_text}\n\n"
-                f"🚀 يمكنك الآن إنشاء مهام التوجيه التلقائي",
-                buttons=buttons
+                f"🚀 يمكنك الآن إنشاء مهام التوجيه التلقائي"
             )
+            await self.edit_or_send_message(event, message_text, buttons=buttons)
             await temp_client.disconnect()
 
         except Exception as e:
             logger.error(f"خطأ في التحقق من كلمة المرور: {e}")
-            await event.respond(
+            message_text = (
                 "❌ كلمة المرور غير صحيحة أو هناك مشكلة في التحقق الثنائي.\n\n"
                 "تأكد من إدخال كلمة المرور الصحيحة وحاول مرة أخرى."
             )
+            await self.edit_or_send_message(event, message_text)
 
     async def cancel_auth(self, event):
         """Cancel authentication"""
