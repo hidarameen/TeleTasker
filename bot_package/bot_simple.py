@@ -10,7 +10,6 @@ from telethon.sessions import StringSession
 from database.database import Database
 from userbot_service.userbot import userbot_instance
 from bot_package.config import BOT_TOKEN, API_ID, API_HASH
-from translations import translations
 import json
 import time
 import os
@@ -29,25 +28,6 @@ class SimpleTelegramBot:
         self.bot = None
         self.conversation_states = {}
         self.user_states = {}  # For handling user input states
-
-    def get_user_language(self, user_id):
-        """Get user language preference"""
-        try:
-            user_settings = self.db.get_user_settings(user_id)
-            if user_settings and user_settings.get('language'):
-                return user_settings['language']
-            
-            # If no settings exist, create default settings
-            self.db.update_user_language(user_id, 'ar')
-            return 'ar'  # Default to Arabic
-        except Exception as e:
-            logger.error(f"خطأ في الحصول على لغة المستخدم {user_id}: {e}")
-            return 'ar'
-
-    def get_text(self, key, user_id, **kwargs):
-        """Get translated text for user"""
-        user_language = self.get_user_language(user_id)
-        return translations.get_text(key, user_language, **kwargs)
 
     def set_user_state(self, user_id, state, data=None):
         """Set user conversation state"""
@@ -107,34 +87,45 @@ class SimpleTelegramBot:
             from userbot_service.userbot import userbot_instance
             is_userbot_running = user_id in userbot_instance.clients
             
-            # Show main menu with translated buttons
+            # Show main menu
             buttons = [
-                [Button.inline(self.get_text("btn_manage_tasks", user_id), b"manage_tasks")],
-                [Button.inline(self.get_text("btn_check_userbot", user_id), b"check_userbot")],
-                [Button.inline(self.get_text("btn_settings", user_id), b"settings")],
-                [Button.inline(self.get_text("btn_about", user_id), b"about")]
+                [Button.inline("📝 إدارة مهام التوجيه", b"manage_tasks")],
+                [Button.inline("🔍 فحص حالة UserBot", b"check_userbot")],
+                [Button.inline("⚙️ الإعدادات", b"settings")],
+                [Button.inline("ℹ️ حول البوت", b"about")]
             ]
 
             # Enhanced welcome message with system status
-            system_status = self.get_text("system_status_active" if is_userbot_running else "system_status_inactive", user_id)
+            system_status = "🟢 نشط" if is_userbot_running else "🟡 مطلوب فحص"
             
             logger.info(f"📤 إرسال قائمة رئيسية للمستخدم المُصادق عليه: {user_id}")
             await event.respond(
-                self.get_text("welcome_authenticated", user_id, 
-                             name=event.sender.first_name, 
-                             status=system_status),
+                f"🎉 أهلاً بك في بوت التوجيه التلقائي!\n\n"
+                f"👋 مرحباً {event.sender.first_name}\n"
+                f"🔑 حالة تسجيل الدخول: نشطة\n"
+                f"🤖 UserBot: {system_status}\n\n"
+                f"💡 النظام الجديد:\n"
+                f"• بوت التحكم منفصل عن UserBot\n"
+                f"• يمكنك إدارة المهام دائماً\n"
+                f"• إذا تعطل UserBot، أعد تسجيل الدخول\n\n"
+                f"اختر ما تريد فعله:",
                 buttons=buttons
             )
             logger.info(f"✅ تم إرسال الرد بنجاح للمستخدم: {user_id}")
         else:
-            # Show authentication menu with translation
+            # Show authentication menu
             buttons = [
-                [Button.inline(self.get_text("btn_login_phone", user_id), b"auth_phone")]
+                [Button.inline("📱 تسجيل الدخول برقم الهاتف", b"auth_phone")]
             ]
 
             logger.info(f"📤 إرسال قائمة تسجيل الدخول للمستخدم غير المُصادق عليه: {user_id}")
             await event.respond(
-                self.get_text("welcome_unauthenticated", user_id),
+                f"🤖 مرحباً بك في بوت التوجيه التلقائي!\n\n"
+                f"📋 هذا البوت يساعدك في:\n"
+                f"• توجيه الرسائل تلقائياً\n"
+                f"• إدارة مهام التوجيه\n"
+                f"• مراقبة المحادثات\n\n"
+                f"🔐 يجب تسجيل الدخول أولاً:",
                 buttons=buttons
             )
             logger.info(f"✅ تم إرسال رد التسجيل بنجاح للمستخدم: {user_id}")
@@ -3810,23 +3801,21 @@ class SimpleTelegramBot:
         tasks = self.db.get_user_tasks(user_id)
 
         buttons = [
-            [Button.inline(self.get_text("btn_create_task", user_id), b"create_task")],
-            [Button.inline(self.get_text("btn_list_tasks", user_id), b"list_tasks")],
-            [Button.inline(self.get_text("btn_back_to_main", user_id), b"back_main")]
+            [Button.inline("➕ إنشاء مهمة جديدة", b"create_task")],
+            [Button.inline("📋 عرض المهام", b"list_tasks")],
+            [Button.inline("🏠 القائمة الرئيسية", b"back_main")]
         ]
 
         tasks_count = len(tasks)
         active_count = len([t for t in tasks if t['is_active']])
 
-        # Create translated task statistics
-        stats_text = f"📊 {self.get_text('statistics', user_id)}:\n"
-        stats_text += f"• {self.get_text('total_tasks', user_id)}: {tasks_count}\n"
-        stats_text += f"• {self.get_text('active_tasks', user_id)}: {active_count}\n"
-        stats_text += f"• {self.get_text('inactive_tasks', user_id)}: {tasks_count - active_count}\n\n"
-        stats_text += self.get_text('choose_action', user_id)
-
         await event.edit(
-            self.get_text("tasks_menu_title", user_id) + "\n\n" + stats_text,
+            f"📝 إدارة مهام التوجيه\n\n"
+            f"📊 الإحصائيات:\n"
+            f"• إجمالي المهام: {tasks_count}\n"
+            f"• المهام النشطة: {active_count}\n"
+            f"• المهام المتوقفة: {tasks_count - active_count}\n\n"
+            f"اختر إجراء:",
             buttons=buttons
         )
 
@@ -5676,23 +5665,23 @@ class SimpleTelegramBot:
         user_id = event.sender_id
         user_settings = self.db.get_user_settings(user_id)
         
-        # Use translated button texts
         buttons = [
-            [Button.inline(self.get_text("btn_change_language", user_id), "language_settings")],
-            [Button.inline(self.get_text("btn_change_timezone", user_id), "timezone_settings")],
-            [Button.inline(self.get_text("btn_check_userbot", user_id), "check_userbot")],
-            [Button.inline(self.get_text("btn_relogin", user_id), b"login")],
-            [Button.inline(self.get_text("btn_delete_all_tasks", user_id), "delete_all_tasks")],
-            [Button.inline(self.get_text("btn_back_to_main", user_id), "main_menu")]
+            [Button.inline("🌐 تغيير اللغة", "language_settings")],
+            [Button.inline("🕐 تغيير المنطقة الزمنية", "timezone_settings")],
+            [Button.inline("🔍 فحص حالة UserBot", "check_userbot")],
+            [Button.inline("🔄 إعادة تسجيل الدخول", b"login")],
+            [Button.inline("🗑️ حذف جميع المهام", "delete_all_tasks")],
+            [Button.inline("🏠 القائمة الرئيسية", "main_menu")]
         ]
 
-        language_name = translations.get_language_name(user_settings['language'] if user_settings else 'ar')
-        timezone_name = user_settings['timezone'] if user_settings else 'Asia/Riyadh'
+        language_name = self.get_language_name(user_settings['language'])
+        timezone_name = user_settings['timezone']
 
         await event.edit(
-            self.get_text("settings_title", user_id, 
-                         language=language_name, 
-                         timezone=timezone_name),
+            f"⚙️ **إعدادات البوت**\n\n"
+            f"🌐 اللغة الحالية: {language_name}\n"
+            f"🕐 المنطقة الزمنية الحالية: {timezone_name}\n\n"
+            "اختر الإعداد الذي تريد تغييره:",
             buttons=buttons
         )
 
@@ -5837,20 +5826,18 @@ class SimpleTelegramBot:
 
     async def show_language_settings(self, event):
         """Show language selection menu"""
-        user_id = event.sender_id
-        
         buttons = [
-            [Button.inline(translations.get_language_name("ar"), "set_language_ar")],
-            [Button.inline(translations.get_language_name("en"), "set_language_en")],
-            [Button.inline(translations.get_language_name("fr"), "set_language_fr")],
-            [Button.inline(translations.get_language_name("de"), "set_language_de")],
-            [Button.inline(translations.get_language_name("es"), "set_language_es")],
-            [Button.inline(translations.get_language_name("ru"), "set_language_ru")],
-            [Button.inline(self.get_text("btn_back_to_settings", user_id), "settings")]
+            [Button.inline("🇸🇦 العربية", "set_language_ar")],
+            [Button.inline("🇺🇸 English", "set_language_en")],
+            [Button.inline("🇫🇷 Français", "set_language_fr")],
+            [Button.inline("🇩🇪 Deutsch", "set_language_de")],
+            [Button.inline("🇪🇸 Español", "set_language_es")],
+            [Button.inline("🇷🇺 Русский", "set_language_ru")],
+            [Button.inline("🔙 العودة للإعدادات", "settings")]
         ]
 
         await event.edit(
-            self.get_text("language_settings_title", user_id),
+            "🌐 **اختر اللغة المفضلة:**",
             buttons=buttons
         )
 
@@ -5895,11 +5882,10 @@ class SimpleTelegramBot:
         success = self.db.update_user_language(user_id, language)
         
         if success:
-            language_name = translations.get_language_name(language)
-            # Use new language for success message
-            await event.answer(translations.get_text("language_changed_success", language, language=language_name))
+            language_name = self.get_language_name(language)
+            await event.answer(f"✅ تم تغيير اللغة إلى {language_name}")
         else:
-            await event.answer(self.get_text("language_change_failed", user_id))
+            await event.answer("❌ فشل في تغيير اللغة")
         
         await self.show_settings(event)
 
@@ -5915,7 +5901,17 @@ class SimpleTelegramBot:
         
         await self.show_settings(event)
 
-# Removed old get_language_name function - now using translations.get_language_name()
+    def get_language_name(self, language_code):
+        """Get language name from code"""
+        languages = {
+            'ar': '🇸🇦 العربية',
+            'en': '🇺🇸 English',
+            'fr': '🇫🇷 Français',
+            'de': '🇩🇪 Deutsch',
+            'es': '🇪🇸 Español',
+            'ru': '🇷🇺 Русский'
+        }
+        return languages.get(language_code, f'{language_code}')
 
     async def start_edit_rate_count(self, event, task_id):
         """Start editing rate limit count"""
