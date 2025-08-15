@@ -3918,7 +3918,7 @@ class SimpleTelegramBot:
 
         # Check if user is authenticated
         if not self.db.is_user_authenticated(user_id):
-            await event.edit("❌ يجب تسجيل الدخول أولاً لعرض المهام")
+            await self.edit_or_send_message(event, "❌ يجب تسجيل الدخول أولاً لعرض المهام")
             return
 
         tasks = self.db.get_user_tasks(user_id)
@@ -4717,7 +4717,7 @@ class SimpleTelegramBot:
             [Button.inline("🔙 عودة للعلامة المائية", f"watermark_settings_{task_id}")]
         ]
         
-        await event.edit(
+        message_text = (
             f"🎨 إعدادات مظهر العلامة المائية - المهمة #{task_id}\n\n"
             f"📏 **الحجم الحالي**: {size}% (المدى: 5-100%)\n"
             f"🌫️ **الشفافية**: {opacity}% (المدى: 10-100%)\n"
@@ -4729,9 +4729,10 @@ class SimpleTelegramBot:
             f"🎛️ **الإزاحة اليدوية**: تحريك العلامة المائية بدقة من موقعها الأساسي\n"
             f"🔧 **التحكم**: استخدم الأزرار أعلاه لتعديل الإعدادات\n"
             f"🔺 زيادة القيمة / ⬅️➡️⬆️⬇️ التحريك\n"
-            f"🔻 تقليل القيمة",
-            buttons=buttons
+            f"🔻 تقليل القيمة"
         )
+        
+        await self.edit_or_send_message(event, message_text, buttons=buttons)
 
     async def adjust_watermark_size(self, event, task_id, increase=True):
         """Adjust watermark size"""
@@ -4867,12 +4868,13 @@ class SimpleTelegramBot:
         
         buttons.append([Button.inline("🔙 عودة لإعدادات المظهر", f"watermark_appearance_{task_id}")])
         
-        await event.edit(
+        message_text = (
             f"📍 اختيار موقع العلامة المائية - المهمة #{task_id}\n\n"
             f"الموقع الحالي: {position_map.get(current_position, current_position)}\n\n"
-            f"اختر الموقع المطلوب:",
-            buttons=buttons
+            f"اختر الموقع المطلوب:"
         )
+        
+        await self.edit_or_send_message(event, message_text, buttons=buttons)
 
     async def set_watermark_position(self, event, task_id, position):
         """Set watermark position"""
@@ -4907,14 +4909,15 @@ class SimpleTelegramBot:
             [Button.inline("🔙 عودة للعلامة المائية", f"watermark_settings_{task_id}")]
         ]
         
-        await event.edit(
+        message_text = (
             f"🎭 نوع العلامة المائية - المهمة #{task_id}\n\n"
             f"اختر نوع العلامة المائية:\n\n"
             f"📝 **نص**: إضافة نص مخصص\n"
             f"🖼️ **صورة**: استخدام صورة PNG شفافة\n\n"
-            f"النوع الحالي: {'📝 نص' if current_type == 'text' else '🖼️ صورة'}",
-            buttons=buttons
+            f"النوع الحالي: {'📝 نص' if current_type == 'text' else '🖼️ صورة'}"
         )
+        
+        await self.edit_or_send_message(event, message_text, buttons=buttons)
 
     async def show_watermark_media_types(self, event, task_id):
         """Show watermark media type selection"""
@@ -4931,15 +4934,16 @@ class SimpleTelegramBot:
             [Button.inline("🔙 عودة للعلامة المائية", f"watermark_settings_{task_id}")]
         ]
         
-        await event.edit(
+        message_text = (
             f"📱 أنواع الوسائط للعلامة المائية - المهمة #{task_id}\n\n"
             f"اختر أنواع الوسائط التي تريد تطبيق العلامة المائية عليها:\n\n"
             f"📷 **الصور**: JPG, PNG, WebP\n"
             f"🎥 **الفيديوهات**: MP4, AVI, MOV\n"
             f"📄 **المستندات**: ملفات الصور المرسلة كمستندات\n\n"
-            f"✅ = مفعل  |  ❌ = معطل",
-            buttons=buttons
+            f"✅ = مفعل  |  ❌ = معطل"
         )
+        
+        await self.edit_or_send_message(event, message_text, buttons=buttons)
 
     async def set_watermark_type(self, event, task_id, watermark_type):
         """Set watermark type (text or image)"""
@@ -4957,21 +4961,23 @@ class SimpleTelegramBot:
     async def start_watermark_text_input(self, event, task_id):
         """Start watermark text input process"""
         self.set_user_state(event.sender_id, f'watermark_text_input_{task_id}', {'task_id': task_id})
-        await event.edit(
+        message_text = (
             f"📝 إدخال نص العلامة المائية - المهمة #{task_id}\n\n"
             f"أرسل النص الذي تريد استخدامه كعلامة مائية:\n\n"
             f"💡 **ملاحظات**:\n"
             f"• يمكنك استخدام النصوص العربية والإنجليزية\n"
             f"• تجنب النصوص الطويلة جداً\n"
             f"• يمكنك تعديل اللون والحجم من إعدادات المظهر\n\n"
-            f"أرسل /cancel للإلغاء",
-            buttons=[[Button.inline("❌ إلغاء", f"watermark_type_{task_id}")]]
+            f"أرسل /cancel للإلغاء"
         )
+        
+        buttons = [[Button.inline("❌ إلغاء", f"watermark_type_{task_id}")]]
+        await self.edit_or_send_message(event, message_text, buttons=buttons)
 
     async def start_watermark_image_input(self, event, task_id):
         """Start watermark image input process"""
         self.set_user_state(event.sender_id, f'watermark_image_input_{task_id}', {'task_id': task_id})
-        await event.edit(
+        message_text = (
             f"🖼️ رفع صورة العلامة المائية - المهمة #{task_id}\n\n"
             f"أرسل الصورة التي تريد استخدامها كعلامة مائية:\n\n"
             f"📋 **طرق الإرسال المدعومة**:\n"
@@ -4984,9 +4990,11 @@ class SimpleTelegramBot:
             f"⚙️ **المتطلبات**:\n"
             f"• حجم أقل من 10 ميجابايت\n"
             f"• وضوح جيد للنتيجة المطلوبة\n\n"
-            f"أرسل /cancel للإلغاء",
-            buttons=[[Button.inline("❌ إلغاء", f"watermark_type_{task_id}")]]
+            f"أرسل /cancel للإلغاء"
         )
+        
+        buttons = [[Button.inline("❌ إلغاء", f"watermark_type_{task_id}")]]
+        await self.edit_or_send_message(event, message_text, buttons=buttons)
 
     async def handle_watermark_text_input(self, event, task_id):
         """Handle watermark text input"""
@@ -5197,12 +5205,15 @@ class SimpleTelegramBot:
         session_data = self.db.get_user_session(user_id)
 
         if session_data and len(session_data) >= 2 and session_data[2]: # Check for session string
-            await event.edit("🔄 أنت مسجل دخولك بالفعل.\n"
-                             "هل تريد تسجيل الخروج وإعادة تسجيل الدخول؟",
-                             buttons=[
-                                 [Button.inline("✅ نعم، إعادة تسجيل الدخول", b"auth_phone")],
-                                 [Button.inline("❌ لا، العودة للإعدادات", b"settings")]
-                             ])
+            message_text = (
+                "🔄 أنت مسجل دخولك بالفعل.\n"
+                "هل تريد تسجيل الخروج وإعادة تسجيل الدخول؟"
+            )
+            buttons = [
+                [Button.inline("✅ نعم، إعادة تسجيل الدخول", b"auth_phone")],
+                [Button.inline("❌ لا، العودة للإعدادات", b"settings")]
+            ]
+            await self.edit_or_send_message(event, message_text, buttons=buttons)
         else:
             await self.start_auth(event) # If no session, start normal authentication
 
@@ -5217,10 +5228,11 @@ class SimpleTelegramBot:
         self.db.clear_conversation_state(user_id)
 
         # Start fresh authentication
-        await event.edit(
+        message_text = (
             "🔄 تم تسجيل الخروج من الجلسة السابقة\n\n"
             "📱 سيتم بدء عملية تسجيل دخول جديدة..."
         )
+        await self.edit_or_send_message(event, message_text)
 
         # Small delay for better UX
         import asyncio
@@ -5555,11 +5567,11 @@ class SimpleTelegramBot:
             [Button.inline("🏠 القائمة الرئيسية", b"back_main")]
         ]
 
-        await event.edit(
+        message_text = (
             "❌ تم إلغاء عملية تسجيل الدخول\n\n"
-            "يمكنك المحاولة مرة أخرى في أي وقت",
-            buttons=buttons
+            "يمكنك المحاولة مرة أخرى في أي وقت"
         )
+        await self.edit_or_send_message(event, message_text, buttons=buttons)
 
     # Add missing methods for advanced filters
     async def toggle_working_hours(self, event, task_id):
@@ -5618,13 +5630,14 @@ class SimpleTelegramBot:
         }
         self.db.set_conversation_state(user_id, 'setting_working_hours', json.dumps(state_data))
         
-        await event.edit(
+        message_text = (
             "🕐 **تحديد ساعات العمل**\n\n"
             "أدخل ساعة البداية (0-23):\n"
             "مثال: 9 للساعة 9 صباحاً\n"
-            "أو 13 للساعة 1 ظهراً",
-            buttons=[[Button.inline("❌ إلغاء", f"working_hours_filter_{task_id}")]]
+            "أو 13 للساعة 1 ظهراً"
         )
+        buttons = [[Button.inline("❌ إلغاء", f"working_hours_filter_{task_id}")]]
+        await self.edit_or_send_message(event, message_text, buttons=buttons)
 
     async def toggle_inline_button_filter(self, event, task_id):
         """Toggle inline button filter"""
@@ -5717,7 +5730,7 @@ class SimpleTelegramBot:
 
         # Check if user is authenticated
         if not self.db.is_user_authenticated(user_id):
-            await event.edit("❌ يجب تسجيل الدخول أولاً")
+            await self.edit_or_send_message(event, "❌ يجب تسجيل الدخول أولاً")
             return
 
         if data.startswith("task_manage_"):
@@ -5751,9 +5764,7 @@ class SimpleTelegramBot:
                 await self.handle_target_chat(event, message_text)
         except Exception as e:
             logger.error(f"خطأ في إنشاء المهمة للمستخدم {user_id}: {e}")
-            await event.respond(
-                "❌ حدث خطأ أثناء إنشاء المهمة. حاول مرة أخرى."
-            )
+            await self.edit_or_send_message(event, "❌ حدث خطأ أثناء إنشاء المهمة. حاول مرة أخرى.")
             self.db.clear_conversation_state(user_id)
 
     async def show_settings(self, event):
@@ -6013,13 +6024,13 @@ class SimpleTelegramBot:
             [Button.inline("❌ إلغاء", f"rate_limit_{task_id}")]
         ]
         
-        await event.edit(
+        message_text = (
             f"✏️ تعديل عدد الرسائل المسموحة\n\n"
             f"📊 القيمة الحالية: {current_count} رسالة\n\n"
             f"📝 أدخل عدد الرسائل الجديد (رقم من 1 إلى 1000):\n\n"
-            f"💡 مثال: 5 (للسماح بـ 5 رسائل فقط)",
-            buttons=buttons
+            f"💡 مثال: 5 (للسماح بـ 5 رسائل فقط)"
         )
+        await self.edit_or_send_message(event, message_text, buttons=buttons)
 
     async def start_edit_rate_period(self, event, task_id):
         """Start editing rate limit time period"""
@@ -6040,13 +6051,13 @@ class SimpleTelegramBot:
             [Button.inline("❌ إلغاء", f"rate_limit_{task_id}")]
         ]
         
-        await event.edit(
+        message_text = (
             f"✏️ تعديل فترة التحكم بالمعدل\n\n"
             f"📊 القيمة الحالية: {current_period} ثانية\n\n"
             f"📝 أدخل الفترة الجديدة بالثواني (من 1 إلى 3600):\n\n"
-            f"💡 مثال: 60 (دقيقة واحدة)",
-            buttons=buttons
+            f"💡 مثال: 60 (دقيقة واحدة)"
         )
+        await self.edit_or_send_message(event, message_text, buttons=buttons)
 
     async def start_edit_forwarding_delay(self, event, task_id):
         """Start editing forwarding delay"""
@@ -6067,13 +6078,13 @@ class SimpleTelegramBot:
             [Button.inline("❌ إلغاء", f"forwarding_settings_{task_id}")]
         ]
         
-        await event.edit(
+        message_text = (
             f"✏️ تعديل تأخير التوجيه\n\n"
             f"📊 القيمة الحالية: {current_delay} ثانية\n\n"
             f"📝 أدخل التأخير الجديد بالثواني (من 0 إلى 300):\n\n"
-            f"💡 مثال: 5 (تأخير 5 ثواني قبل التوجيه)",
-            buttons=buttons
+            f"💡 مثال: 5 (تأخير 5 ثواني قبل التوجيه)"
         )
+        await self.edit_or_send_message(event, message_text, buttons=buttons)
 
     async def start_edit_sending_interval(self, event, task_id):
         """Start editing sending interval"""
@@ -6094,13 +6105,13 @@ class SimpleTelegramBot:
             [Button.inline("❌ إلغاء", f"forwarding_settings_{task_id}")]
         ]
         
-        await event.edit(
+        message_text = (
             f"✏️ تعديل فاصل الإرسال\n\n"
             f"📊 القيمة الحالية: {current_interval} ثانية\n\n"
             f"📝 أدخل الفاصل الجديد بالثواني (من 0 إلى 60):\n\n"
-            f"💡 مثال: 2 (فاصل ثانيتين بين إرسال الرسائل)",
-            buttons=buttons
+            f"💡 مثال: 2 (فاصل ثانيتين بين إرسال الرسائل)"
         )
+        await self.edit_or_send_message(event, message_text, buttons=buttons)
 
 
     async def show_media_filters(self, event, task_id):
@@ -6304,7 +6315,7 @@ class SimpleTelegramBot:
             [Button.inline("❌ إلغاء", f"text_formatting_{task_id}")]
         ]
 
-        await event.edit(message, buttons=buttons)
+        await self.edit_or_send_message(event, message, buttons=buttons)
         
         # Store the state for this user in database
         state_data = {
@@ -6320,7 +6331,7 @@ class SimpleTelegramBot:
         # Check if user wants to cancel
         if message_text.lower() in ['إلغاء', 'cancel']:
             self.db.clear_conversation_state(user_id)
-            await event.respond("❌ تم إلغاء تعديل إعدادات الرابط.")
+            await self.edit_or_send_message(event, "❌ تم إلغاء تعديل إعدادات الرابط.")
             await self.show_text_formatting(event, task_id)
             return
 
@@ -6331,7 +6342,7 @@ class SimpleTelegramBot:
 
         # Validate URL
         if not hyperlink_url.startswith(('http://', 'https://')):
-            await event.respond(
+            await self.edit_or_send_message(event, 
                 "❌ عنوان الرابط يجب أن يبدأ بـ http:// أو https://\n\n"
                 "حاول مرة أخرى أو أرسل 'إلغاء'"
             )
@@ -6347,7 +6358,7 @@ class SimpleTelegramBot:
         self.db.clear_conversation_state(user_id)
 
         if success:
-            await event.respond(
+            await self.edit_or_send_message(event, 
                 f"✅ تم تحديث رابط النص بنجاح!\n\n"
                 f"• الرابط الجديد: {hyperlink_url}\n"
                 f"• سيتم استخدام النص الأصلي كنص الرابط"
@@ -6359,7 +6370,7 @@ class SimpleTelegramBot:
             # Return to text formatting settings
             await self.show_text_formatting(event, task_id)
         else:
-            await event.respond("❌ فشل في تحديث إعدادات الرابط")
+            await self.edit_or_send_message(event, "❌ فشل في تحديث إعدادات الرابط")
             await self.show_text_formatting(event, task_id)
 
     async def show_word_filters(self, event, task_id):
@@ -6774,7 +6785,7 @@ class SimpleTelegramBot:
 
         buttons.append([Button.inline("🔙 رجوع لتنظيف النصوص", f"text_cleaning_{task_id}")])
 
-        await event.edit(message, buttons=buttons)
+        await self.edit_or_send_message(event, message, buttons=buttons)
 
     async def start_adding_text_cleaning_keywords(self, event, task_id):
         """Start adding text cleaning keywords"""
@@ -6804,7 +6815,7 @@ class SimpleTelegramBot:
             [Button.inline("❌ إلغاء", f"manage_text_clean_keywords_{task_id}")]
         ]
 
-        await event.edit(message, buttons=buttons)
+        await self.edit_or_send_message(event, message, buttons=buttons)
         
         # Store the state for this user in database
         state_data = {
@@ -6838,14 +6849,14 @@ class SimpleTelegramBot:
                 
         except (json.JSONDecodeError, KeyError, ValueError) as e:
             logger.error(f"خطأ في تحليل بيانات المهمة: {e}, data_type: {type(data)}, data: {data}")
-            await event.respond("❌ خطأ في البيانات. حاول مرة أخرى.")
+            await self.edit_or_send_message(event, "❌ خطأ في البيانات. حاول مرة أخرى.")
             self.db.clear_conversation_state(user_id)
             return
 
         # Check if user wants to cancel
         if message_text.lower() in ['إلغاء', 'cancel']:
             self.db.clear_conversation_state(user_id)
-            await event.respond("❌ تم إلغاء إضافة الكلمات.")
+            await self.edit_or_send_message(event, "❌ تم إلغاء إضافة الكلمات.")
             await self.manage_text_cleaning_keywords(event, task_id)
             return
 
@@ -6868,7 +6879,7 @@ class SimpleTelegramBot:
                 keywords_to_add.extend(keywords_in_line)
 
         if not keywords_to_add:
-            await event.respond("❌ لم يتم إدخال أي كلمات صالحة. حاول مرة أخرى أو أرسل 'إلغاء' للخروج.")
+            await self.edit_or_send_message(event, "❌ لم يتم إدخال أي كلمات صالحة. حاول مرة أخرى أو أرسل 'إلغاء' للخروج.")
             return
 
         # Add keywords to database
@@ -6878,7 +6889,7 @@ class SimpleTelegramBot:
         self.db.clear_conversation_state(user_id)
 
         if added_count > 0:
-            await event.respond(f"✅ تم إضافة {added_count} كلمة/جملة لحذف الأسطر")
+            await self.edit_or_send_message(event, f"✅ تم إضافة {added_count} كلمة/جملة لحذف الأسطر")
             
             # Force refresh UserBot tasks
             await self._refresh_userbot_tasks(user_id)
@@ -6886,7 +6897,7 @@ class SimpleTelegramBot:
             # Return to keywords management
             await self.manage_text_cleaning_keywords(event, task_id)
         else:
-            await event.respond("⚠️ لم يتم إضافة أي كلمات جديدة (قد تكون موجودة مسبقاً)")
+            await self.edit_or_send_message(event, "⚠️ لم يتم إضافة أي كلمات جديدة (قد تكون موجودة مسبقاً)")
             await self.manage_text_cleaning_keywords(event, task_id)
 
     async def show_text_formatting(self, event, task_id, force_refresh=False):
@@ -7055,7 +7066,7 @@ class SimpleTelegramBot:
             [Button.inline("❌ إلغاء", f"word_filters_{task_id}")]
         ]
 
-        await event.edit(message, buttons=buttons)
+        await self.edit_or_send_message(event, message, buttons=buttons)
         
         # Store the state for this user in database
         state_data = {
@@ -7090,7 +7101,7 @@ class SimpleTelegramBot:
             ]
         ]
 
-        await event.edit(message, buttons=buttons)
+        await self.edit_or_send_message(event, message, buttons=buttons)
 
     # Duplicate function removed - using the one at line 6212
 
@@ -7106,7 +7117,7 @@ class SimpleTelegramBot:
         if message_text.lower() == 'إلغاء':
             # Cancel adding words
             self.db.clear_conversation_state(user_id)
-            await event.respond("❌ تم إلغاء إضافة الكلمات")
+            await self.edit_or_send_message(event, "❌ تم إلغاء إضافة الكلمات")
             await self.show_word_filters(event, task_id)
             return
 
@@ -7129,7 +7140,7 @@ class SimpleTelegramBot:
                 words_to_add.extend(words_in_line)
 
         if not words_to_add:
-            await event.respond("❌ لم يتم إدخال أي كلمات صالحة. حاول مرة أخرى أو أرسل 'إلغاء' للخروج.")
+            await self.edit_or_send_message(event, "❌ لم يتم إدخال أي كلمات صالحة. حاول مرة أخرى أو أرسل 'إلغاء' للخروج.")
             return
 
         # Add words to filter
@@ -7140,7 +7151,7 @@ class SimpleTelegramBot:
 
         if added_count > 0:
             filter_name = "القائمة البيضاء" if filter_type == 'whitelist' else "القائمة السوداء"
-            await event.respond(f"✅ تم إضافة {added_count} كلمة/جملة إلى {filter_name}")
+            await self.edit_or_send_message(event, f"✅ تم إضافة {added_count} كلمة/جملة إلى {filter_name}")
             
             # Force refresh UserBot tasks
             await self._refresh_userbot_tasks(user_id)
@@ -7151,7 +7162,7 @@ class SimpleTelegramBot:
             else:
                 await self.show_blacklist_management_new(event, task_id)
         else:
-            await event.respond("⚠️ لم يتم إضافة أي كلمات جديدة (قد تكون موجودة مسبقاً)")
+            await self.edit_or_send_message(event, "⚠️ لم يتم إضافة أي كلمات جديدة (قد تكون موجودة مسبقاً)")
             # Send new message instead of trying to edit
             if filter_type == 'whitelist':
                 await self.show_whitelist_management_new(event, task_id)
@@ -7234,7 +7245,7 @@ class SimpleTelegramBot:
 
         buttons.append([Button.inline("🔙 رجوع لفلاتر الكلمات", f"word_filters_{task_id}")])
 
-        await event.edit(message, buttons=buttons)
+        await self.edit_or_send_message(event, message, buttons=buttons)
 
     async def start_add_word(self, event, task_id, filter_type):
         """Start adding words to filter"""
@@ -7292,7 +7303,7 @@ class SimpleTelegramBot:
         words_input = event.raw_text.strip()
 
         if not task_id or not filter_type:
-            await event.respond("❌ خطأ في البيانات، حاول مرة أخرى")
+            await self.edit_or_send_message(event, "❌ خطأ في البيانات، حاول مرة أخرى")
             self.db.clear_conversation_state(user_id)
             return
 
@@ -7303,7 +7314,7 @@ class SimpleTelegramBot:
             words = [words_input] if words_input else []
 
         if not words:
-            await event.respond("❌ لم يتم إدخال أي كلمات صحيحة")
+            await self.edit_or_send_message(event, "❌ لم يتم إدخال أي كلمات صحيحة")
             return
 
         # Add each word
@@ -7325,14 +7336,14 @@ class SimpleTelegramBot:
             # Force refresh UserBot tasks
             await self._refresh_userbot_tasks(user_id)
 
-            await event.respond(f"✅ تم إضافة {added_count} كلمة إلى {filter_name}")
+            await self.edit_or_send_message(event, f"✅ تم إضافة {added_count} كلمة إلى {filter_name}")
             # Return to the specific filter management page
             if filter_type == 'whitelist':
                 await self.handle_manage_whitelist(event)
             else:
                 await self.handle_manage_blacklist(event)
         else:
-            await event.respond("❌ فشل في إضافة الكلمات أو أنها موجودة بالفعل")
+            await self.edit_or_send_message(event, "❌ فشل في إضافة الكلمات أو أنها موجودة بالفعل")
 
     async def remove_word(self, event, word_id, task_id, filter_type):
         """Remove word from filter"""
@@ -7520,7 +7531,7 @@ class SimpleTelegramBot:
         """Show whitelist management interface with new message"""
         task = self.db.get_task(task_id, event.sender_id)
         if not task:
-            await event.respond("❌ لم يتم العثور على المهمة")
+            await self.edit_or_send_message(event, "❌ لم يتم العثور على المهمة")
             return
         
         whitelist_enabled = self.db.is_word_filter_enabled(task_id, 'whitelist')
@@ -7551,13 +7562,13 @@ class SimpleTelegramBot:
             [Button.inline("🔙 رجوع لفلاتر الكلمات", f"word_filters_{task_id}")]
         ]
 
-        await event.respond(message, buttons=buttons)
+        await self.edit_or_send_message(event, message, buttons=buttons)
 
     async def show_blacklist_management_new(self, event, task_id):
         """Show blacklist management interface with new message"""
         task = self.db.get_task(task_id, event.sender_id)
         if not task:
-            await event.respond("❌ لم يتم العثور على المهمة")
+            await self.edit_or_send_message(event, "❌ لم يتم العثور على المهمة")
             return
         
         blacklist_enabled = self.db.is_word_filter_enabled(task_id, 'blacklist')
@@ -7588,7 +7599,7 @@ class SimpleTelegramBot:
             [Button.inline("🔙 رجوع لفلاتر الكلمات", f"word_filters_{task_id}")]
         ]
 
-        await event.respond(message, buttons=buttons)
+        await self.edit_or_send_message(event, message, buttons=buttons)
 
     # Text Replacement Management Functions
     async def show_text_replacements(self, event, task_id):
@@ -8612,14 +8623,14 @@ class SimpleTelegramBot:
             [Button.inline("❌ إلغاء", f"forwarding_settings_{task_id}")]
         ]
 
-        await event.edit(
+        message_text = (
             f"⏰ تحديد مدة الحذف التلقائي\n\n"
             f"📊 **المدة الحالية**: {current_display}\n\n"
             f"🎯 **اختر مدة جديدة**:\n\n"
             f"💡 أو أرسل رقماً بالثواني (مثال: 7200 للساعتين)\n\n"
-            f"⚠️ **تنبيه**: سيتم حذف الرسائل تلقائياً بعد المدة المحددة",
-            buttons=buttons
+            f"⚠️ **تنبيه**: سيتم حذف الرسائل تلقائياً بعد المدة المحددة"
         )
+        await self.edit_or_send_message(event, message_text, buttons=buttons)
 
     async def handle_set_auto_delete_time(self, event, task_id, time_str):
         """Handle setting auto delete time from text input"""
@@ -8631,10 +8642,10 @@ class SimpleTelegramBot:
         try:
             seconds = int(time_str.strip())
             if seconds < 60:
-                await event.respond("❌ أقل مدة مسموحة هي 60 ثانية")
+                await self.edit_or_send_message(event, "❌ أقل مدة مسموحة هي 60 ثانية")
                 return
             elif seconds > 604800:  # 7 days
-                await event.respond("❌ أقصى مدة مسموحة هي 7 أيام (604800 ثانية)")
+                await self.edit_or_send_message(event, "❌ أقصى مدة مسموحة هي 7 أيام (604800 ثانية)")
                 return
                 
             self.db.set_auto_delete_time(task_id, seconds)
@@ -8647,11 +8658,11 @@ class SimpleTelegramBot:
             else:
                 time_display = f"{seconds} ثانية"
                 
-            await event.respond(f"✅ تم تحديد مدة الحذف التلقائي إلى {time_display}")
+            await self.edit_or_send_message(event, f"✅ تم تحديد مدة الحذف التلقائي إلى {time_display}")
             await self.show_forwarding_settings(event, task_id)
             
         except ValueError:
-            await event.respond("❌ يرجى إدخال رقم صحيح بالثواني")
+            await self.edit_or_send_message(event, "❌ يرجى إدخال رقم صحيح بالثواني")
 
     async def set_delete_time_direct(self, event, task_id, seconds):
         """Set auto delete time directly from button"""
@@ -9313,7 +9324,7 @@ class SimpleTelegramBot:
         task = self.db.get_task(task_id, user_id)
         
         if not task:
-            await event.respond("❌ المهمة غير موجودة")
+            await self.edit_or_send_message(event, "❌ المهمة غير موجودة")
             return
             
         message_text = event.message.text.strip()
@@ -9331,19 +9342,19 @@ class SimpleTelegramBot:
                 success = self.db.update_watermark_position(task_id, y=value)
                 setting_name = "موقع Y للعلامة المائية"
             else:
-                await event.respond("❌ نوع إعداد غير مدعوم")
+                await self.edit_or_send_message(event, "❌ نوع إعداد غير مدعوم")
                 return
                 
             if success:
-                await event.respond(f"✅ تم تحديث {setting_name}")
+                await self.edit_or_send_message(event, f"✅ تم تحديث {setting_name}")
             else:
-                await event.respond(f"❌ فشل في تحديث {setting_name}")
+                await self.edit_or_send_message(event, f"❌ فشل في تحديث {setting_name}")
                 
         except ValueError:
-            await event.respond("❌ قيمة غير صحيحة. يرجى إدخال رقم صحيح")
+            await self.edit_or_send_message(event, "❌ قيمة غير صحيحة. يرجى إدخال رقم صحيح")
         except Exception as e:
             logger.error(f"خطأ في تحديث إعداد العلامة المائية: {e}")
-            await event.respond("❌ حدث خطأ أثناء التحديث")
+            await self.edit_or_send_message(event, "❌ حدث خطأ أثناء التحديث")
         
         # Clear user state
         self.clear_user_state(user_id)
@@ -9354,7 +9365,7 @@ class SimpleTelegramBot:
         task = self.db.get_task(task_id, user_id)
         
         if not task:
-            await event.respond("❌ المهمة غير موجودة")
+            await self.edit_or_send_message(event, "❌ المهمة غير موجودة")
             return
             
         message_text = event.message.text.strip()
@@ -9362,21 +9373,21 @@ class SimpleTelegramBot:
         try:
             value = int(message_text)
             if value < 1:
-                await event.respond("❌ يجب أن يكون العدد أكبر من 0")
+                await self.edit_or_send_message(event, "❌ يجب أن يكون العدد أكبر من 0")
                 return
                 
             success = self.db.update_character_limit(task_id, value)
             
             if success:
-                await event.respond(f"✅ تم تحديث حد الأحرف إلى {value}")
+                await self.edit_or_send_message(event, f"✅ تم تحديث حد الأحرف إلى {value}")
             else:
-                await event.respond("❌ فشل في تحديث حد الأحرف")
+                await self.edit_or_send_message(event, "❌ فشل في تحديث حد الأحرف")
                 
         except ValueError:
-            await event.respond("❌ يرجى إدخال رقم صحيح")
+            await self.edit_or_send_message(event, "❌ يرجى إدخال رقم صحيح")
         except Exception as e:
             logger.error(f"خطأ في تحديث حد الأحرف: {e}")
-            await event.respond("❌ حدث خطأ أثناء التحديث")
+            await self.edit_or_send_message(event, "❌ حدث خطأ أثناء التحديث")
         
         # Clear user state
         self.clear_user_state(user_id)
@@ -9387,7 +9398,7 @@ class SimpleTelegramBot:
         task = self.db.get_task(task_id, user_id)
         
         if not task:
-            await event.respond("❌ المهمة غير موجودة")
+            await self.edit_or_send_message(event, "❌ المهمة غير موجودة")
             return
             
         if message_text is None:
@@ -9398,7 +9409,7 @@ class SimpleTelegramBot:
         try:
             value = int(message_text)
             if value < 1 or value > 1000:
-                await event.respond("❌ يجب أن يكون العدد بين 1 و 1000")
+                await self.edit_or_send_message(event, "❌ يجب أن يكون العدد بين 1 و 1000")
                 return
                 
             success = self.db.update_rate_limit_settings(task_id, message_count=value)
@@ -9408,7 +9419,7 @@ class SimpleTelegramBot:
                 buttons = [
                     [Button.inline("🔙 رجوع لإعدادات حد المعدل", f"rate_limit_{task_id}")]
                 ]
-                await event.respond(
+                await self.edit_or_send_message(event, 
                     f"✅ تم تحديث عدد الرسائل المسموحة بنجاح!\n\n"
                     f"📊 العدد الجديد: {value} رسالة\n"
                     f"🎯 المهمة: {task.get('task_name', 'مهمة بدون اسم')}",
@@ -9418,13 +9429,13 @@ class SimpleTelegramBot:
                 # Force refresh UserBot tasks
                 await self._refresh_userbot_tasks(user_id)
             else:
-                await event.respond("❌ فشل في تحديث عدد الرسائل")
+                await self.edit_or_send_message(event, "❌ فشل في تحديث عدد الرسائل")
                 
         except ValueError:
-            await event.respond("❌ يرجى إدخال رقم صحيح")
+            await self.edit_or_send_message(event, "❌ يرجى إدخال رقم صحيح")
         except Exception as e:
             logger.error(f"خطأ في تحديث عدد الرسائل: {e}")
-            await event.respond("❌ حدث خطأ أثناء التحديث")
+            await self.edit_or_send_message(event, "❌ حدث خطأ أثناء التحديث")
         
         # Clear user state
         self.clear_user_state(user_id)
@@ -9435,7 +9446,7 @@ class SimpleTelegramBot:
         task = self.db.get_task(task_id, user_id)
         
         if not task:
-            await event.respond("❌ المهمة غير موجودة")
+            await self.edit_or_send_message(event, "❌ المهمة غير موجودة")
             return
             
         if message_text is None:
@@ -9446,7 +9457,7 @@ class SimpleTelegramBot:
         try:
             value = int(message_text)
             if value < 1 or value > 3600:
-                await event.respond("❌ يجب أن تكون الفترة بين 1 و 3600 ثانية")
+                await self.edit_or_send_message(event, "❌ يجب أن تكون الفترة بين 1 و 3600 ثانية")
                 return
                 
             success = self.db.update_rate_limit_settings(task_id, time_period_seconds=value)
@@ -9459,7 +9470,7 @@ class SimpleTelegramBot:
                 buttons = [
                     [Button.inline("🔙 رجوع لإعدادات حد المعدل", f"rate_limit_{task_id}")]
                 ]
-                await event.respond(
+                await self.edit_or_send_message(event, 
                     f"✅ تم تحديث فترة التحكم بالمعدل بنجاح!\n\n"
                     f"⏰ الفترة الجديدة: {period_display}\n"
                     f"🎯 المهمة: {task.get('task_name', 'مهمة بدون اسم')}",
@@ -9469,13 +9480,13 @@ class SimpleTelegramBot:
                 # Force refresh UserBot tasks
                 await self._refresh_userbot_tasks(user_id)
             else:
-                await event.respond("❌ فشل في تحديث فترة التحكم")
+                await self.edit_or_send_message(event, "❌ فشل في تحديث فترة التحكم")
                 
         except ValueError:
-            await event.respond("❌ يرجى إدخال رقم صحيح")
+            await self.edit_or_send_message(event, "❌ يرجى إدخال رقم صحيح")
         except Exception as e:
             logger.error(f"خطأ في تحديث فترة التحكم: {e}")
-            await event.respond("❌ حدث خطأ أثناء التحديث")
+            await self.edit_or_send_message(event, "❌ حدث خطأ أثناء التحديث")
         
         # Clear user state
         self.clear_user_state(user_id)
@@ -10563,7 +10574,7 @@ class SimpleTelegramBot:
                 [Button.inline("ℹ️ حول البوت", b"about")]
             ]
             
-            await event.respond(
+            await self.edit_or_send_message(event, 
                 f"🎉 تم تسجيل الدخول بنجاح!\n\n"
                 f"📱 الرقم: {phone}\n"
                 f"⏳ جاري تشغيل خدمة التوجيه التلقائي...\n\n"
@@ -10576,7 +10587,7 @@ class SimpleTelegramBot:
                 
         except Exception as e:
             logger.error(f"❌ خطأ في إتمام عملية تسجيل الدخول: {e}")
-            await event.respond(
+            await self.edit_or_send_message(event, 
                 "❌ حدث خطأ في إتمام تسجيل الدخول\n\n"
                 "حاول مرة أخرى باستخدام /start"
             )
@@ -10591,14 +10602,14 @@ class SimpleTelegramBot:
                 logger.info(f"✅ تم تشغيل UserBot للمستخدم {user_id} في الخلفية")
                 # Optionally send a notification to user that UserBot is ready
                 try:
-                    await event.respond("✅ تم تشغيل خدمة التوجيه التلقائي بنجاح!")
+                    await self.edit_or_send_message(event, "✅ تم تشغيل خدمة التوجيه التلقائي بنجاح!")
                 except:
                     # User might have moved on, that's fine
                     pass
             else:
                 logger.error(f"❌ فشل في تشغيل UserBot للمستخدم {user_id}")
                 try:
-                    await event.respond(
+                    await self.edit_or_send_message(event, 
                         "⚠️ فشل في تشغيل خدمة التوجيه التلقائي\n"
                         "يمكنك المحاولة مرة أخرى باستخدام /start"
                     )
@@ -10608,7 +10619,7 @@ class SimpleTelegramBot:
         except Exception as e:
             logger.error(f"خطأ في تشغيل UserBot في الخلفية للمستخدم {user_id}: {e}")
             try:
-                await event.respond(
+                await self.edit_or_send_message(event, 
                     "⚠️ حدث خطأ في تشغيل خدمة التوجيه\n"
                     "يمكنك المحاولة مرة أخرى باستخدام /start"
                 )
@@ -10622,7 +10633,7 @@ class SimpleTelegramBot:
         task = self.db.get_task(task_id, user_id)
         
         if not task:
-            await event.respond("❌ المهمة غير موجودة")
+            await self.edit_or_send_message(event, "❌ المهمة غير موجودة")
             return
             
         task_name = task.get('task_name', 'مهمة بدون اسم')
@@ -10646,7 +10657,7 @@ class SimpleTelegramBot:
             [Button.inline("🔙 رجوع للمميزات المتقدمة", f"advanced_features_{task_id}")]
         ]
         
-        await event.respond(
+        await self.edit_or_send_message(event, 
             f"⏳ إعدادات تأخير التوجيه للمهمة: {task_name}\n\n"
             f"📊 الحالة: {status_text}\n"
             f"⏱️ مدة التأخير: {delay_text}\n\n"
@@ -10661,7 +10672,7 @@ class SimpleTelegramBot:
         task = self.db.get_task(task_id, user_id)
         
         if not task:
-            await event.respond("❌ المهمة غير موجودة")
+            await self.edit_or_send_message(event, "❌ المهمة غير موجودة")
             return
             
         task_name = task.get('task_name', 'مهمة بدون اسم')
@@ -10685,7 +10696,7 @@ class SimpleTelegramBot:
             [Button.inline("🔙 رجوع للمميزات المتقدمة", f"advanced_features_{task_id}")]
         ]
         
-        await event.respond(
+        await self.edit_or_send_message(event, 
             f"📊 إعدادات فترات الإرسال للمهمة: {task_name}\n\n"
             f"📊 الحالة: {status_text}\n"
             f"⏱️ الفترة بين الرسائل: {interval_text}\n\n"
@@ -10700,7 +10711,7 @@ class SimpleTelegramBot:
         task = self.db.get_task(task_id, user_id)
         
         if not task:
-            await event.respond("❌ المهمة غير موجودة")
+            await self.edit_or_send_message(event, "❌ المهمة غير موجودة")
             return
             
         task_name = task.get('task_name', 'مهمة بدون اسم')
@@ -10717,7 +10728,7 @@ class SimpleTelegramBot:
             [Button.inline("🔙 رجوع للمميزات المتقدمة", f"advanced_features_{task_id}")]
         ]
         
-        await event.respond(
+        await self.edit_or_send_message(event, 
             f"⚡ إعدادات حد المعدل للمهمة: {task_name}\n\n"
             f"📊 الحالة: {status_text}\n"
             f"🔢 عدد الرسائل: {settings['message_count']}\n"
