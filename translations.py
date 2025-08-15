@@ -25,10 +25,10 @@ class BotTranslations:
                 # إعدادات اللغة والمنطقة الزمنية
                 'language_settings_title': "🌐 **اختر اللغة المفضلة:**",
                 'timezone_settings_title': "🕐 **اختر المنطقة الزمنية:**",
-                'settings_title': "⚙️ **إعدادات البوت**\n\n🌐 اللغة الحالية: {language}\n🕐 المنطقة الزمنية الحالية: {timezone}\n\nاختر الإعداد الذي تريد تغييره:",
+                'settings_title': "⚙️ **إعدادات البوت**\n\n🌐 اللغة الحالية: {language_name}\n🕐 المنطقة الزمنية الحالية: {timezone}\n\nاختر الإعداد الذي تريد تغييره:",
                 
                 # رسائل النجاح والخطأ
-                'language_changed_success': "✅ تم تغيير اللغة إلى {language}",
+                'language_changed_success': "✅ تم تغيير اللغة إلى {language_name}",
                 'language_change_failed': "❌ فشل في تغيير اللغة",
                 'timezone_changed_success': "✅ تم تغيير المنطقة الزمنية إلى {timezone}",
                 'timezone_change_failed': "❌ فشل في تغيير المنطقة الزمنية",
@@ -100,10 +100,10 @@ class BotTranslations:
                 # Language and timezone settings
                 'language_settings_title': "🌐 **Choose your preferred language:**",
                 'timezone_settings_title': "🕐 **Choose your timezone:**",
-                'settings_title': "⚙️ **Bot Settings**\n\n🌐 Current language: {language}\n🕐 Current timezone: {timezone}\n\nChoose the setting you want to change:",
+                'settings_title': "⚙️ **Bot Settings**\n\n🌐 Current language: {language_name}\n🕐 Current timezone: {timezone}\n\nChoose the setting you want to change:",
                 
                 # Success and error messages
-                'language_changed_success': "✅ Language changed to {language}",
+                'language_changed_success': "✅ Language changed to {language_name}",
                 'language_change_failed': "❌ Failed to change language",
                 'timezone_changed_success': "✅ Timezone changed to {timezone}",
                 'timezone_change_failed': "❌ Failed to change timezone",
@@ -175,10 +175,10 @@ class BotTranslations:
                 # Paramètres de langue et fuseau horaire
                 'language_settings_title': "🌐 **Choisissez votre langue préférée:**",
                 'timezone_settings_title': "🕐 **Choisissez votre fuseau horaire:**",
-                'settings_title': "⚙️ **Paramètres du Bot**\n\n🌐 Langue actuelle: {language}\n🕐 Fuseau horaire actuel: {timezone}\n\nChoisissez le paramètre que vous voulez modifier:",
+                'settings_title': "⚙️ **Paramètres du Bot**\n\n🌐 Langue actuelle: {language_name}\n🕐 Fuseau horaire actuel: {timezone}\n\nChoisissez le paramètre que vous voulez modifier:",
                 
                 # Messages de succès et d'erreur
-                'language_changed_success': "✅ Langue changée en {language}",
+                'language_changed_success': "✅ Langue changée en {language_name}",
                 'language_change_failed': "❌ Échec du changement de langue",
                 'timezone_changed_success': "✅ Fuseau horaire changé en {timezone}",
                 'timezone_change_failed': "❌ Échec du changement de fuseau horaire",
@@ -250,10 +250,10 @@ class BotTranslations:
                 # Sprach- und Zeitzoneneinstellungen
                 'language_settings_title': "🌐 **Wählen Sie Ihre bevorzugte Sprache:**",
                 'timezone_settings_title': "🕐 **Wählen Sie Ihre Zeitzone:**",
-                'settings_title': "⚙️ **Bot-Einstellungen**\n\n🌐 Aktuelle Sprache: {language}\n🕐 Aktuelle Zeitzone: {timezone}\n\nWählen Sie die Einstellung, die Sie ändern möchten:",
+                'settings_title': "⚙️ **Bot-Einstellungen**\n\n🌐 Aktuelle Sprache: {language_name}\n🕐 Aktuelle Zeitzone: {timezone}\n\nWählen Sie die Einstellung, die Sie ändern möchten:",
                 
                 # Erfolgs- und Fehlermeldungen
-                'language_changed_success': "✅ Sprache geändert zu {language}",
+                'language_changed_success': "✅ Sprache geändert zu {language_name}",
                 'language_change_failed': "❌ Sprache konnte nicht geändert werden",
                 'timezone_changed_success': "✅ Zeitzone geändert zu {timezone}",
                 'timezone_change_failed': "❌ Zeitzone konnte nicht geändert werden",
@@ -325,10 +325,10 @@ class BotTranslations:
                 # Configuración de idioma y zona horaria
                 'language_settings_title': "🌐 **Elige tu idioma preferido:**",
                 'timezone_settings_title': "🕐 **Elige tu zona horaria:**",
-                'settings_title': "⚙️ **Configuración del Bot**\n\n🌐 Idioma actual: {language}\n🕐 Zona horaria actual: {timezone}\n\nElige la configuración que quieres cambiar:",
+                'settings_title': "⚙️ **Configuración del Bot**\n\n🌐 Idioma actual: {language_name}\n🕐 Zona horaria actual: {timezone}\n\nElige la configuración que quieres cambiar:",
                 
                 # Mensajes de éxito y error
-                'language_changed_success': "✅ Idioma cambiado a {language}",
+                'language_changed_success': "✅ Idioma cambiado a {language_name}",
                 'language_change_failed': "❌ Falló el cambio de idioma",
                 'timezone_changed_success': "✅ Zona horaria cambiada a {timezone}",
                 'timezone_change_failed': "❌ Falló el cambio de zona horaria",
@@ -400,10 +400,10 @@ class BotTranslations:
                 # Настройки языка и часового пояса
                 'language_settings_title': "🌐 **Выберите предпочитаемый язык:**",
                 'timezone_settings_title': "🕐 **Выберите ваш часовой пояс:**",
-                'settings_title': "⚙️ **Настройки Бота**\n\n🌐 Текущий язык: {language}\n🕐 Текущий часовой пояс: {timezone}\n\nВыберите настройку, которую хотите изменить:",
+                'settings_title': "⚙️ **Настройки Бота**\n\n🌐 Текущий язык: {language_name}\n🕐 Текущий часовой пояс: {timezone}\n\nВыберите настройку, которую хотите изменить:",
                 
                 # Сообщения успеха и ошибки
-                'language_changed_success': "✅ Язык изменён на {language}",
+                'language_changed_success': "✅ Язык изменён на {language_name}",
                 'language_change_failed': "❌ Не удалось изменить язык",
                 'timezone_changed_success': "✅ Часовой пояс изменён на {timezone}",
                 'timezone_change_failed': "❌ Не удалось изменить часовой пояс",

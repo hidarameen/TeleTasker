@@ -47,6 +47,8 @@ class SimpleTelegramBot:
     def get_text(self, key, user_id, **kwargs):
         """Get translated text for user"""
         user_language = self.get_user_language(user_id)
+        # Remove 'language' from kwargs if it exists to avoid conflict
+        kwargs.pop('language', None)
         return translations.get_text(key, user_language, **kwargs)
 
     def set_user_state(self, user_id, state, data=None):
@@ -5691,7 +5693,7 @@ class SimpleTelegramBot:
 
         await event.edit(
             self.get_text("settings_title", user_id, 
-                         language=language_name, 
+                         language_name=language_name, 
                          timezone=timezone_name),
             buttons=buttons
         )
@@ -5897,7 +5899,7 @@ class SimpleTelegramBot:
         if success:
             language_name = translations.get_language_name(language)
             # Use new language for success message
-            await event.answer(translations.get_text("language_changed_success", language, language=language_name))
+            await event.answer(translations.get_text("language_changed_success", language, language_name=language_name))
         else:
             await event.answer(self.get_text("language_change_failed", user_id))
         
