@@ -2092,6 +2092,16 @@ class SimpleTelegramBot:
                     except ValueError as e:
                         logger.error(f"❌ خطأ في تحليل معرف المهمة/المشرف/المصدر: {e}")
                         await event.answer("❌ خطأ في تحليل البيانات")
+            elif data.startswith("manage_signatures_"): # Handler for managing admin signatures
+                parts = data.split("_")
+                if len(parts) >= 4:
+                    try:
+                        task_id = int(parts[2])
+                        source_chat_id = parts[3]
+                        await self.manage_admin_signatures(event, task_id, source_chat_id)
+                    except ValueError as e:
+                        logger.error(f"❌ خطأ في تحليل معرف المهمة/المصدر: {e}")
+                        await event.answer("❌ خطأ في تحليل البيانات")
 
         except Exception as e:
             import traceback
