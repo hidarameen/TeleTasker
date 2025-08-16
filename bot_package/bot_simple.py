@@ -3479,7 +3479,7 @@ class SimpleTelegramBot:
         task = self.db.get_task(task_id, user_id)
         
         if not task:
-            await event.answer("❌ المهمة غير موجودة")
+            await self.edit_or_send_message(event, "❌ المهمة غير موجودة")
             return
             
         # Get current language filters
@@ -3570,7 +3570,7 @@ class SimpleTelegramBot:
         task = self.db.get_task(task_id, user_id)
         
         if not task:
-            await event.answer("❌ المهمة غير موجودة")
+            await self.edit_or_send_message(event, "❌ المهمة غير موجودة")
             return
             
         # Add timestamp to force UI refresh
@@ -3648,7 +3648,7 @@ class SimpleTelegramBot:
         task = self.db.get_task(task_id, user_id)
         
         if not task:
-            await event.answer("❌ المهمة غير موجودة")
+            await self.edit_or_send_message(event, "❌ المهمة غير موجودة")
             return
         
         # Set conversation state for adding language
