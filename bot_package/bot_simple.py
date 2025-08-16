@@ -110,6 +110,7 @@ class SimpleTelegramBot:
 
         # Add event handlers
         self.bot.add_event_handler(self.handle_start, events.NewMessage(pattern='/start'))
+        self.bot.add_event_handler(self.handle_login, events.NewMessage(pattern='/login'))
         self.bot.add_event_handler(self.handle_callback, events.CallbackQuery())
         self.bot.add_event_handler(self.handle_message, events.NewMessage())
 
@@ -168,7 +169,8 @@ class SimpleTelegramBot:
         else:
             # Show authentication menu
             buttons = [
-                [Button.inline("📱 تسجيل الدخول برقم الهاتف", b"auth_phone")]
+                [Button.inline("📱 تسجيل الدخول برقم الهاتف", b"auth_phone")],
+                [Button.inline("🔑 تسجيل الدخول بجلسة جاهزة", b"login_session")]
             ]
 
             logger.info(f"📤 إرسال قائمة تسجيل الدخول للمستخدم غير المُصادق عليه: {user_id}")
@@ -183,6 +185,55 @@ class SimpleTelegramBot:
             await self.edit_or_send_message(event, message_text, buttons=buttons)
             logger.info(f"✅ تم إرسال رد التسجيل بنجاح للمستخدم: {user_id}")
 
+    async def handle_login(self, event):
+        """Handle /login command"""
+        logger.info(f"📥 تم استلام أمر /login من المستخدم: {event.sender_id}")
+        
+        # Only respond to /login in private chats
+        if not event.is_private:
+            logger.info(f"🚫 تجاهل أمر /login في محادثة غير خاصة: {event.chat_id}")
+            return
+
+        user_id = event.sender_id
+        
+        # Check if user is already authenticated
+        if self.db.is_user_authenticated(user_id):
+            buttons = [
+                [Button.inline("🔄 إعادة تسجيل الدخول", b"relogin")],
+                [Button.inline("🏠 القائمة الرئيسية", b"back_main")]
+            ]
+            
+            message_text = (
+                "🔄 أنت مسجل دخولك بالفعل!\n\n"
+                "هل تريد:\n"
+                "• إعادة تسجيل الدخول بجلسة جديدة؟\n"
+                "• العودة للقائمة الرئيسية؟"
+            )
+            await self.edit_or_send_message(event, message_text, buttons=buttons)
+            return
+        
+        # Show login options
+        buttons = [
+            [Button.inline("📱 تسجيل الدخول برقم الهاتف", b"auth_phone")],
+            [Button.inline("🔑 تسجيل الدخول بجلسة جاهزة", b"login_session")]
+        ]
+        
+        message_text = (
+            "🔐 تسجيل الدخول - بوت التوجيه التلقائي\n\n"
+            "اختر طريقة تسجيل الدخول:\n\n"
+            "📱 **تسجيل الدخول برقم الهاتف**:\n"
+            "• إرسال رمز التحقق\n"
+            "• إدخال كلمة المرور (إذا كانت مفعلة)\n\n"
+            "🔑 **تسجيل الدخول بجلسة جاهزة**:\n"
+            "• استخدام جلسة تليثون موجودة\n"
+            "• أسرع وأسهل\n\n"
+            "💡 **كيفية الحصول على الجلسة**:\n"
+            "• استخدم @SessionStringBot\n"
+            "• أو استخدم @StringSessionBot\n"
+            "• أو استخدم @UseTGXBot"
+        )
+        await self.edit_or_send_message(event, message_text, buttons=buttons)
+
 
     async def handle_callback(self, event):
         """Handle button callbacks"""
@@ -192,6 +243,12 @@ class SimpleTelegramBot:
 
             if data == "auth_phone":
                 await self.start_auth(event)
+            elif data == "login_session":
+                await self.start_session_login(event)
+            elif data == "relogin":
+                await self.handle_relogin(event)
+            elif data == "back_main":
+                await self.handle_start(event)
             elif data == "manage_tasks":
                 await self.show_tasks_menu(event)
             elif data == "create_task":
@@ -5229,6 +5286,35 @@ class SimpleTelegramBot:
         
         await self.edit_or_send_message(event, message_text, buttons=buttons)
 
+    async def start_session_login(self, event):
+        """Start session-based login process"""
+        user_id = event.sender_id
+
+        # Save conversation state in database
+        self.db.set_conversation_state(user_id, 'waiting_session', json.dumps({}))
+
+        buttons = [
+            [Button.inline("❌ إلغاء", b"cancel_auth")]
+        ]
+
+        message_text = (
+            "🔑 تسجيل الدخول بجلسة جاهزة\n\n"
+            "📋 **كيفية الحصول على الجلسة**:\n"
+            "• استخدم @SessionStringBot\n"
+            "• أو استخدم @StringSessionBot\n"
+            "• أو استخدم @UseTGXBot\n\n"
+            "📝 **أرسل الجلسة الآن**:\n"
+            "• انسخ الجلسة من البوت\n"
+            "• أرسلها هنا\n"
+            "• مثال: 1BQANOTEz...\n\n"
+            "⚠️ **تحذير**:\n"
+            "• لا تشارك الجلسة مع أحد\n"
+            "• احتفظ بها آمنة\n"
+            "• الجلسة تمنح الوصول الكامل لحسابك"
+        )
+        
+        await self.edit_or_send_message(event, message_text, buttons=buttons)
+
     async def start_login(self, event): # New function for login button
         """Start login process"""
         user_id = event.sender_id
@@ -5284,6 +5370,8 @@ class SimpleTelegramBot:
                 await self.handle_code_input(event, message_text, data)
             elif state == 'waiting_password':
                 await self.handle_password_input(event, message_text, data)
+            elif state == 'waiting_session':
+                await self.handle_session_input(event, message_text)
         except Exception as e:
             logger.error(f"خطأ في التسجيل للمستخدم {user_id}: {e}")
             message_text = (
@@ -5515,6 +5603,179 @@ class SimpleTelegramBot:
                 "🔢 أرسل الرمز الصحيح أو اطلب رمز جديد"
             )
             await self.edit_or_send_message(event, message_text)
+
+    async def handle_session_input(self, event, session_string: str):
+        """Handle session string input"""
+        user_id = event.sender_id
+        
+        # Clean the session string
+        session_string = session_string.strip()
+        
+        # Basic validation
+        if not session_string or len(session_string) < 100:
+            message_text = (
+                "❌ الجلسة غير صحيحة\n\n"
+                "📋 تأكد من:\n"
+                "• نسخ الجلسة كاملة\n"
+                "• الجلسة تبدأ بـ 1 أو 2\n"
+                "• طول الجلسة أكثر من 100 حرف\n\n"
+                "🔍 **كيفية الحصول على الجلسة**:\n"
+                "• استخدم @SessionStringBot\n"
+                "• أو استخدم @StringSessionBot\n"
+                "• أو استخدم @UseTGXBot\n\n"
+                "أرسل الجلسة مرة أخرى:"
+            )
+            await self.edit_or_send_message(event, message_text)
+            return
+        
+        try:
+            # Validate session string by trying to create a client
+            from telethon.sessions import StringSession
+            from telethon import TelegramClient
+            
+            # Create temporary client to test session
+            temp_client = TelegramClient(StringSession(session_string), int(API_ID), API_HASH)
+            
+            # Connect with timeout
+            await asyncio.wait_for(temp_client.connect(), timeout=15)
+            
+            if not temp_client.is_connected():
+                raise Exception("فشل في الاتصال بخوادم تليجرام")
+            
+            # Check if session is authorized
+            if not await temp_client.is_user_authorized():
+                await temp_client.disconnect()
+                message_text = (
+                    "❌ الجلسة غير صالحة أو منتهية الصلاحية\n\n"
+                    "🔍 **الأسباب المحتملة**:\n"
+                    "• الجلسة منتهية الصلاحية\n"
+                    "• تم تسجيل الخروج من الجلسة\n"
+                    "• تم تغيير كلمة المرور\n\n"
+                    "💡 **الحل**:\n"
+                    "• احصل على جلسة جديدة\n"
+                    "• أو استخدم تسجيل الدخول برقم الهاتف"
+                )
+                await self.edit_or_send_message(event, message_text)
+                self.db.clear_conversation_state(user_id)
+                return
+            
+            # Get user info
+            user = await temp_client.get_me()
+            
+            # Get phone number from session
+            phone = getattr(user, 'phone', None)
+            if not phone:
+                phone = "غير متوفر"
+            
+            # Save session to database
+            self.db.save_user_session(user_id, phone, session_string)
+            
+            # Clear conversation state
+            self.db.clear_conversation_state(user_id)
+            
+            # Disconnect temp client
+            await temp_client.disconnect()
+            
+            # Start UserBot with this session
+            from userbot_service.userbot import userbot_instance
+            success = await userbot_instance.start_with_session(user_id, session_string)
+            
+            if success:
+                # Send session to Saved Messages
+                try:
+                    user_client = TelegramClient(StringSession(session_string), int(API_ID), API_HASH)
+                    await user_client.connect()
+                    
+                    session_message = (
+                        f"🔐 جلسة تسجيل الدخول - بوت التوجيه التلقائي\n\n"
+                        f"📱 الرقم: {phone}\n"
+                        f"👤 الاسم: {user.first_name}\n"
+                        f"🤖 البوت: @7959170262\n"
+                        f"📅 التاريخ: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+                        f"🔑 سلسلة الجلسة:\n"
+                        f"`{session_string}`\n\n"
+                        f"⚠️ احتفظ بهذه الرسالة آمنة ولا تشاركها مع أحد!"
+                    )
+                    await user_client.send_message('me', session_message)
+                    await user_client.disconnect()
+                    session_saved_text = "✅ تم حفظ الجلسة في رسائلك المحفوظة"
+                except Exception as save_error:
+                    logger.error(f"خطأ في إرسال الجلسة للرسائل المحفوظة: {save_error}")
+                    session_saved_text = "⚠️ تم حفظ الجلسة محلياً فقط"
+                
+                buttons = [
+                    [Button.inline("📝 إدارة مهام التوجيه", b"manage_tasks")],
+                    [Button.inline("🏠 القائمة الرئيسية", b"back_main")]
+                ]
+                
+                message_text = (
+                    f"🎉 تم تسجيل الدخول بنجاح!\n\n"
+                    f"👋 مرحباً {user.first_name}!\n"
+                    f"✅ تم ربط حسابك بنجاح\n"
+                    f"📱 الرقم: {phone}\n"
+                    f"{session_saved_text}\n\n"
+                    f"🚀 يمكنك الآن إنشاء مهام التوجيه التلقائي"
+                )
+                await self.edit_or_send_message(event, message_text, buttons=buttons)
+                
+            else:
+                message_text = (
+                    "⚠️ تم حفظ الجلسة ولكن فشل في تشغيل خدمة التوجيه\n\n"
+                    "🔍 **الأسباب المحتملة**:\n"
+                    "• مشكلة في الاتصال\n"
+                    "• الجلسة قديمة\n"
+                    "• مشكلة في الخادم\n\n"
+                    "💡 **الحل**:\n"
+                    "• حاول مرة أخرى\n"
+                    "• أو استخدم جلسة جديدة"
+                )
+                await self.edit_or_send_message(event, message_text)
+                
+        except asyncio.TimeoutError:
+            message_text = (
+                "❌ مهلة زمنية في الاتصال\n\n"
+                "🌐 تأكد من اتصالك بالإنترنت وحاول مرة أخرى"
+            )
+            await self.edit_or_send_message(event, message_text)
+            self.db.clear_conversation_state(user_id)
+            
+        except Exception as e:
+            logger.error(f"خطأ في التحقق من الجلسة: {e}")
+            error_message = str(e)
+            
+            if "AUTH_KEY_UNREGISTERED" in error_message:
+                message_text = (
+                    "❌ الجلسة غير صالحة أو منتهية الصلاحية\n\n"
+                    "🔍 **الأسباب المحتملة**:\n"
+                    "• الجلسة منتهية الصلاحية\n"
+                    "• تم تسجيل الخروج من الجلسة\n"
+                    "• تم تغيير كلمة المرور\n\n"
+                    "💡 **الحل**:\n"
+                    "• احصل على جلسة جديدة\n"
+                    "• أو استخدم تسجيل الدخول برقم الهاتف"
+                )
+            elif "PHONE_CODE_INVALID" in error_message:
+                message_text = (
+                    "❌ رمز التحقق غير صحيح\n\n"
+                    "🔍 **الأسباب المحتملة**:\n"
+                    "• الرمز منتهي الصلاحية\n"
+                    "• الرمز غير صحيح\n\n"
+                    "💡 **الحل**:\n"
+                    "• اطلب رمز جديد\n"
+                    "• أو استخدم تسجيل الدخول بجلسة جاهزة"
+                )
+            else:
+                message_text = (
+                    f"❌ حدث خطأ في التحقق من الجلسة\n\n"
+                    f"🔍 **تفاصيل الخطأ**:\n"
+                    f"{error_message}\n\n"
+                    f"💡 **الحل**:\n"
+                    f"• تأكد من صحة الجلسة\n"
+                    f"• أو استخدم تسجيل الدخول برقم الهاتف"
+                )
+            
+            await self.edit_or_send_message(event, message_text)
+            self.db.clear_conversation_state(user_id)
 
     async def handle_password_input(self, event, password: str, data: str):
         """Handle 2FA password input"""
