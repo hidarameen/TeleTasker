@@ -618,7 +618,7 @@ class WatermarkProcessor:
             return False
     
     def apply_watermark_to_video(self, video_path: str, watermark_settings: dict) -> Optional[str]:
-        """تطبيق العلامة المائية على فيديو مع تحسين الضغط"""
+        """تطبيق العلامة المائية على فيديو مع الحفاظ على الصوت والدقة"""
         try:
             # فتح الفيديو
             cap = cv2.VideoCapture(video_path)
@@ -632,6 +632,13 @@ class WatermarkProcessor:
             height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
             total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
             
+            if fps <= 0 or total_frames <= 0:
+                logger.error(f"خصائص الفيديو غير صحيحة: FPS={fps}, Frames={total_frames}")
+                cap.release()
+                return None
+            
+            logger.info(f"📹 معلومات الفيديو: {width}x{height}, {fps} FPS, {total_frames} إطار")
+            
             # إنشاء ملف مؤقت للفيديو الجديد
             temp_dir = tempfile.gettempdir()
             temp_output = os.path.join(temp_dir, f"temp_watermarked_{os.path.basename(video_path)}")
@@ -641,9 +648,14 @@ class WatermarkProcessor:
             if not final_output.endswith('.mp4'):
                 final_output = os.path.splitext(final_output)[0] + '.mp4'
             
-            # إعداد كاتب الفيديو
+            # إعداد كاتب الفيديو - استخدام كودك H.264 للحفاظ على الجودة
             fourcc = cv2.VideoWriter.fourcc(*'mp4v')
             out = cv2.VideoWriter(temp_output, fourcc, fps, (width, height))
+            
+            if not out.isOpened():
+                logger.error("فشل في إنشاء كاتب الفيديو")
+                cap.release()
+                return None
             
             # تحضير العلامة المائية
             watermark_img = None
@@ -657,9 +669,12 @@ class WatermarkProcessor:
                     watermark_settings['opacity'],
                     (width, height)
                 )
+                
                 if watermark_pil:
-                    watermark_img = cv2.cvtColor(np.array(watermark_pil), cv2.COLOR_RGBA2BGRA)
-            
+                    # تحويل PIL إلى OpenCV
+                    watermark_cv = cv2.cvtColor(np.array(watermark_pil), cv2.COLOR_RGBA2BGRA)
+                    watermark_img = watermark_cv
+                    
             elif watermark_settings['watermark_type'] == 'image' and watermark_settings['watermark_image_path']:
                 watermark_pil = self.load_image_watermark(
                     watermark_settings['watermark_image_path'],
@@ -668,20 +683,27 @@ class WatermarkProcessor:
                     (width, height),
                     watermark_settings.get('position', 'bottom_right')
                 )
+                
                 if watermark_pil:
-                    watermark_img = cv2.cvtColor(np.array(watermark_pil), cv2.COLOR_RGBA2BGRA)
+                    # تحويل PIL إلى OpenCV
+                    watermark_cv = cv2.cvtColor(np.array(watermark_pil), cv2.COLOR_RGBA2BGRA)
+                    watermark_img = watermark_cv
             
-            if watermark_img is None:
-                cap.release()
-                out.release()
-                return video_path
+            # حساب موقع العلامة المائية
+            watermark_position = None
+            if watermark_img is not None:
+                watermark_height, watermark_width = watermark_img.shape[:2]
+                offset_x = watermark_settings.get('offset_x', 0)
+                offset_y = watermark_settings.get('offset_y', 0)
+                watermark_position = self.calculate_position(
+                    (width, height), 
+                    (watermark_width, watermark_height), 
+                    watermark_settings['position'], 
+                    offset_x, 
+                    offset_y
+                )
             
-            # حساب موقع العلامة المائية مع الإزاحة اليدوية
-            watermark_height, watermark_width = watermark_img.shape[:2]
-            offset_x = watermark_settings.get('offset_x', 0)
-            offset_y = watermark_settings.get('offset_y', 0)
-            position = self.calculate_position((width, height), (watermark_width, watermark_height), watermark_settings['position'], offset_x, offset_y)
-            x, y = position
+            logger.info(f"🎬 بدء معالجة الفيديو: {total_frames} إطار")
             
             # معالجة كل إطار
             frame_count = 0
@@ -690,53 +712,105 @@ class WatermarkProcessor:
                 if not ret:
                     break
                 
-                # تطبيق العلامة المائية على الإطار
-                try:
-                    # إنشاء قناع للعلامة المائية
-                    alpha = watermark_img[:, :, 3] / 255.0
-                    
-                    # تطبيق العلامة المائية
-                    for c in range(0, 3):
-                        frame[y:y+watermark_height, x:x+watermark_width, c] = (
-                            alpha * watermark_img[:, :, c] + 
-                            (1 - alpha) * frame[y:y+watermark_height, x:x+watermark_width, c]
-                        )
-                except Exception as e:
-                    logger.warning(f"خطأ في تطبيق العلامة المائية على الإطار {frame_count}: {e}")
+                # تطبيق العلامة المائية إذا كانت موجودة
+                if watermark_img is not None and watermark_position is not None:
+                    try:
+                        # إنشاء نسخة من الإطار
+                        frame_with_watermark = frame.copy()
+                        
+                        # تطبيق العلامة المائية
+                        x, y = watermark_position
+                        
+                        # التأكد من أن العلامة المائية تتناسب مع حدود الإطار
+                        if x + watermark_width <= width and y + watermark_height <= height:
+                            # تطبيق العلامة المائية مع الشفافية
+                            if watermark_img.shape[2] == 4:  # RGBA
+                                alpha = watermark_img[:, :, 3] / 255.0
+                                alpha = np.expand_dims(alpha, axis=2)
+                                
+                                # دمج العلامة المائية مع الإطار
+                                for c in range(3):  # BGR
+                                    frame_with_watermark[y:y+watermark_height, x:x+watermark_width, c] = \
+                                        frame_with_watermark[y:y+watermark_height, x:x+watermark_width, c] * (1 - alpha[:, :, 0]) + \
+                                        watermark_img[:, :, c] * alpha[:, :, 0]
+                            
+                            frame = frame_with_watermark
+                    except Exception as e:
+                        logger.warning(f"فشل في تطبيق العلامة المائية على الإطار {frame_count}: {e}")
                 
                 # كتابة الإطار
                 out.write(frame)
-                frame_count += 1
                 
-                # إظهار التقدم كل 100 إطار
+                frame_count += 1
                 if frame_count % 100 == 0:
                     progress = (frame_count / total_frames) * 100
                     logger.info(f"معالجة الفيديو: {progress:.1f}% ({frame_count}/{total_frames})")
             
-            # إغلاق الملفات
+            # إغلاق الموارد
             cap.release()
             out.release()
             
-            # تحسين ضغط الفيديو
-            logger.info("🎬 بدء تحسين ضغط الفيديو...")
-            if self.optimize_video_compression(temp_output, final_output):
-                # حذف الملف المؤقت
+            logger.info(f"✅ تم معالجة {frame_count} إطار بنجاح")
+            
+            # الآن نقوم بنسخ الصوت من الفيديو الأصلي إلى الفيديو المعالج
+            # باستخدام FFmpeg للحفاظ على الصوت
+            if self.ffmpeg_available:
+                try:
+                    logger.info("🔊 نسخ الصوت من الفيديو الأصلي...")
+                    
+                    # استخدام FFmpeg لدمج الفيديو المعالج مع الصوت الأصلي
+                    cmd = [
+                        'ffmpeg', '-y',
+                        '-i', temp_output,  # الفيديو المعالج
+                        '-i', video_path,   # الفيديو الأصلي (للصوت)
+                        '-c:v', 'copy',     # نسخ الفيديو كما هو
+                        '-c:a', 'aac',      # تحويل الصوت إلى AAC
+                        '-b:a', '128k',     # معدل بت الصوت
+                        '-map', '0:v:0',    # استخدام الفيديو من الملف الأول
+                        '-map', '1:a:0',    # استخدام الصوت من الملف الثاني
+                        final_output
+                    ]
+                    
+                    result = subprocess.run(cmd, capture_output=True, text=True)
+                    
+                    if result.returncode == 0:
+                        logger.info("✅ تم دمج الصوت بنجاح")
+                        # حذف الملف المؤقت
+                        if os.path.exists(temp_output):
+                            os.unlink(temp_output)
+                        return final_output
+                    else:
+                        logger.warning(f"فشل في دمج الصوت: {result.stderr}")
+                        # استخدام الملف المؤقت بدون صوت
+                        shutil.copy2(temp_output, final_output)
+                        if os.path.exists(temp_output):
+                            os.unlink(temp_output)
+                        return final_output
+                        
+                except Exception as e:
+                    logger.warning(f"فشل في دمج الصوت: {e}")
+                    # استخدام الملف المؤقت بدون صوت
+                    shutil.copy2(temp_output, final_output)
+                    if os.path.exists(temp_output):
+                        os.unlink(temp_output)
+                    return final_output
+            else:
+                # بدون FFmpeg، استخدم الملف المؤقت
+                logger.warning("FFmpeg غير متوفر، الفيديو سيكون بدون صوت")
+                shutil.copy2(temp_output, final_output)
                 if os.path.exists(temp_output):
                     os.unlink(temp_output)
-                
-                logger.info(f"✅ تم تطبيق العلامة المائية وتحسين الفيديو: {final_output}")
                 return final_output
-            else:
-                # في حالة فشل التحسين، استخدم الملف المؤقت
-                logger.warning("فشل في تحسين الفيديو، استخدام الملف المؤقت")
-                if os.path.exists(temp_output):
-                    os.rename(temp_output, final_output)
-                    return final_output
-                else:
-                    return video_path
-            
+                
         except Exception as e:
             logger.error(f"خطأ في تطبيق العلامة المائية على الفيديو: {e}")
+            # تنظيف الملفات المؤقتة
+            for temp_file in [temp_output, final_output]:
+                if os.path.exists(temp_file):
+                    try:
+                        os.unlink(temp_file)
+                    except:
+                        pass
             return None
     
     def should_apply_watermark(self, media_type: str, watermark_settings: dict) -> bool:
@@ -767,45 +841,67 @@ class WatermarkProcessor:
             return 'document'
     
     def process_media_with_watermark(self, media_bytes: bytes, file_name: str, watermark_settings: dict) -> Optional[bytes]:
-        """معالجة الوسائط وتطبيق العلامة المائية حسب النوع"""
+        """معالجة الوسائط مع العلامة المائية"""
         try:
+            # تحديد نوع الوسائط
             media_type = self.get_media_type_from_file(file_name)
             
-            if not self.should_apply_watermark(media_type, watermark_settings):
-                return media_bytes
-            
-            if media_type == 'photo':
+            if media_type == 'image':
+                # معالجة الصور
+                logger.info(f"🖼️ معالجة صورة: {file_name}")
                 return self.apply_watermark_to_image(media_bytes, watermark_settings)
-            
+                
             elif media_type == 'video':
-                # حفظ الفيديو مؤقتاً
+                # معالجة الفيديوهات
+                logger.info(f"🎬 معالجة فيديو: {file_name}")
+                
+                # إنشاء ملف مؤقت للفيديو
                 temp_input = tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file_name)[1])
                 temp_input.write(media_bytes)
                 temp_input.close()
                 
-                # تطبيق العلامة المائية
-                watermarked_path = self.apply_watermark_to_video(temp_input.name, watermark_settings)
-                
-                if watermarked_path and os.path.exists(watermarked_path):
-                    # قراءة الفيديو المعالج
-                    with open(watermarked_path, 'rb') as f:
-                        watermarked_bytes = f.read()
+                try:
+                    # تطبيق العلامة المائية
+                    watermarked_path = self.apply_watermark_to_video(temp_input.name, watermark_settings)
                     
-                    # حذف الملفات المؤقتة
-                    os.unlink(temp_input.name)
-                    os.unlink(watermarked_path)
-                    
-                    return watermarked_bytes
-                else:
+                    if watermarked_path and os.path.exists(watermarked_path):
+                        # الآن نقوم بضغط الفيديو مع الحفاظ على الدقة
+                        compressed_path = tempfile.mktemp(suffix='.mp4')
+                        
+                        if self.compress_video_preserve_quality(watermarked_path, compressed_path):
+                            logger.info("✅ تم ضغط الفيديو مع الحفاظ على الدقة")
+                            final_path = compressed_path
+                        else:
+                            logger.warning("فشل في ضغط الفيديو، استخدام الفيديو الأصلي")
+                            final_path = watermarked_path
+                        
+                        # قراءة الفيديو المعالج
+                        with open(final_path, 'rb') as f:
+                            watermarked_bytes = f.read()
+                        
+                        # تنظيف الملفات المؤقتة
+                        os.unlink(temp_input.name)
+                        if os.path.exists(watermarked_path):
+                            os.unlink(watermarked_path)
+                        if final_path != watermarked_path and os.path.exists(final_path):
+                            os.unlink(final_path)
+                        
+                        return watermarked_bytes
+                    else:
+                        logger.warning("فشل في تطبيق العلامة المائية على الفيديو")
+                        os.unlink(temp_input.name)
+                        return media_bytes
+                        
+                except Exception as e:
+                    logger.error(f"خطأ في معالجة الفيديو: {e}")
                     os.unlink(temp_input.name)
                     return media_bytes
-            
             else:
-                # نوع وسائط غير مدعوم للعلامة المائية
+                logger.warning(f"نوع وسائط غير مدعوم: {media_type}")
                 return media_bytes
                 
         except Exception as e:
-            logger.error(f"خطأ في معالجة الوسائط بالعلامة المائية: {e}")
+            logger.error(f"خطأ في معالجة الوسائط: {e}")
             return media_bytes
     
     def process_media_once_for_all_targets(self, media_bytes: bytes, file_name: str, watermark_settings: dict, 
@@ -857,3 +953,98 @@ class WatermarkProcessor:
             'cache_size': len(self.processed_media_cache),
             'cache_keys': list(self.processed_media_cache.keys())
         }
+
+    def compress_video_preserve_quality(self, input_path: str, output_path: str, target_size_mb: float = None) -> bool:
+        """ضغط الفيديو مع الحفاظ على الدقة والجودة"""
+        try:
+            if not self.ffmpeg_available:
+                logger.warning("FFmpeg غير متوفر، لا يمكن ضغط الفيديو")
+                return False
+            
+            # الحصول على معلومات الفيديو
+            video_info = self.get_video_info(input_path)
+            if not video_info:
+                logger.warning("فشل في الحصول على معلومات الفيديو")
+                return False
+            
+            original_size = video_info.get('size_mb', 0)
+            original_width = video_info.get('width', 0)
+            original_height = video_info.get('height', 0)
+            original_fps = video_info.get('fps', 30)
+            duration = video_info.get('duration', 0)
+            
+            logger.info(f"📹 معلومات الفيديو الأصلي: {original_width}x{original_height}, {original_fps} FPS, {original_size:.2f} MB")
+            
+            # حساب معدل البت الأمثل
+            if target_size_mb and original_size > target_size_mb:
+                # حساب معدل البت المطلوب للوصول للحجم المستهدف
+                target_bitrate = int((target_size_mb * 8 * 1024 * 1024) / duration)
+                target_bitrate = max(target_bitrate, 500000)  # حد أدنى 500 kbps
+                
+                logger.info(f"🎯 الحجم المستهدف: {target_size_mb:.2f} MB, معدل البت: {target_bitrate/1000:.0f} kbps")
+            else:
+                # استخدام معدل البت الأصلي مع تحسين بسيط
+                target_bitrate = int(video_info.get('bitrate', 2000000) * 0.8)  # تقليل 20%
+                logger.info(f"🔄 تحسين بسيط: معدل البت {target_bitrate/1000:.0f} kbps")
+            
+            # إعدادات FFmpeg محسنة للحفاظ على الجودة
+            cmd = [
+                'ffmpeg', '-y',
+                '-i', input_path,
+                # إعدادات الفيديو - الحفاظ على الدقة
+                '-c:v', 'libx264',           # كودك H.264
+                '-preset', 'slow',           # بطيء للحصول على جودة أفضل
+                '-crf', '18',                # جودة عالية (18 = جودة ممتازة)
+                '-maxrate', f'{target_bitrate}',
+                '-bufsize', f'{target_bitrate * 2}',
+                '-profile:v', 'high',        # ملف H.264 عالي
+                '-level', '4.1',             # مستوى متوافق
+                # إعدادات الصوت
+                '-c:a', 'aac',               # كودك الصوت
+                '-b:a', '128k',              # معدل بت الصوت
+                '-ar', '48000',              # معدل العينات
+                # إعدادات إضافية
+                '-movflags', '+faststart',   # تحسين التشغيل
+                '-pix_fmt', 'yuv420p',       # تنسيق بكسل متوافق
+                '-metadata', 'title=Enhanced Bot Video',
+                output_path
+            ]
+            
+            logger.info(f"🎬 بدء ضغط الفيديو مع الحفاظ على الدقة...")
+            
+            # تنفيذ الضغط
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            
+            if result.returncode == 0:
+                # التحقق من النتيجة
+                final_info = self.get_video_info(output_path)
+                if final_info:
+                    final_size = final_info.get('size_mb', 0)
+                    final_width = final_info.get('width', 0)
+                    final_height = final_info.get('height', 0)
+                    final_fps = final_info.get('fps', 0)
+                    
+                    # التحقق من الحفاظ على الدقة
+                    if final_width == original_width and final_height == original_height:
+                        compression_ratio = (original_size - final_size) / original_size * 100
+                        
+                        logger.info(f"✅ تم ضغط الفيديو بنجاح مع الحفاظ على الدقة:")
+                        logger.info(f"   📏 الدقة: {final_width}x{final_height} (محفوظة)")
+                        logger.info(f"   🎬 معدل الإطارات: {final_fps} FPS")
+                        logger.info(f"   📦 الحجم: {original_size:.2f} MB → {final_size:.2f} MB")
+                        logger.info(f"   💾 التوفير: {compression_ratio:.1f}%")
+                        
+                        return True
+                    else:
+                        logger.warning(f"⚠️ تغيرت الدقة: {original_width}x{original_height} → {final_width}x{final_height}")
+                        return False
+                else:
+                    logger.warning("تم إنشاء الفيديو ولكن فشل في التحقق من النتيجة")
+                    return True
+            else:
+                logger.error(f"فشل في ضغط الفيديو: {result.stderr}")
+                return False
+                
+        except Exception as e:
+            logger.error(f"خطأ في ضغط الفيديو: {e}")
+            return False
