@@ -16,6 +16,9 @@ SQLAlchemy==2.0.34
 # Image Processing
 Pillow==10.4.0
 
+# Audio Processing
+mutagen>=1.47.0
+
 # Video Processing & Optimization
 # ملاحظة: ffmpeg-python هي مكتبة Python للتفاعل مع FFmpeg
 # FFmpeg نفسه يجب تثبيته كأداة نظام منفصلة
