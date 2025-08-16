@@ -607,6 +607,28 @@ class Database:
                 )
             ''')
 
+            # ===== Task audio metadata settings table =====
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS task_audio_metadata_settings (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    task_id INTEGER NOT NULL UNIQUE,
+                    enabled BOOLEAN DEFAULT FALSE,
+                    template TEXT DEFAULT 'default',
+                    album_art_enabled BOOLEAN DEFAULT FALSE,
+                    album_art_path TEXT,
+                    apply_art_to_all BOOLEAN DEFAULT FALSE,
+                    audio_merge_enabled BOOLEAN DEFAULT FALSE,
+                    intro_audio_path TEXT,
+                    outro_audio_path TEXT,
+                    intro_position TEXT DEFAULT 'start' CHECK (intro_position IN ('start', 'end')),
+                    preserve_original BOOLEAN DEFAULT TRUE,
+                    convert_to_mp3 BOOLEAN DEFAULT TRUE,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (task_id) REFERENCES tasks (id) ON DELETE CASCADE
+                )
+            ''')
+
             # Task character limit settings table
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS task_character_limit_settings (
@@ -5166,4 +5188,181 @@ class Database:
                 ''', (status, pending_id))
             conn.commit()
             return cursor.rowcount > 0
+
+    # ===== Audio Metadata Settings Management =====
+    def get_audio_metadata_settings(self, task_id: int) -> dict:
+        """Get audio metadata settings for a task (returns defaults if missing)"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT enabled, template, album_art_enabled, album_art_path, apply_art_to_all,
+                       audio_merge_enabled, intro_audio_path, outro_audio_path, intro_position,
+                       preserve_original, convert_to_mp3
+                FROM task_audio_metadata_settings
+                WHERE task_id = ?
+            ''', (task_id,))
+            row = cursor.fetchone()
+            if row:
+                return {
+                    'enabled': bool(row['enabled']),
+                    'template': row['template'] or 'default',
+                    'album_art_enabled': bool(row['album_art_enabled']),
+                    'album_art_path': row['album_art_path'] or '',
+                    'apply_art_to_all': bool(row['apply_art_to_all']),
+                    'audio_merge_enabled': bool(row['audio_merge_enabled']),
+                    'intro_audio_path': row['intro_audio_path'] or '',
+                    'outro_audio_path': row['outro_audio_path'] or '',
+                    'intro_position': row['intro_position'] or 'start',
+                    'preserve_original': bool(row['preserve_original']),
+                    'convert_to_mp3': bool(row['convert_to_mp3'])
+                }
+            else:
+                return {
+                    'enabled': False,
+                    'template': 'default',
+                    'album_art_enabled': False,
+                    'album_art_path': '',
+                    'apply_art_to_all': False,
+                    'audio_merge_enabled': False,
+                    'intro_audio_path': '',
+                    'outro_audio_path': '',
+                    'intro_position': 'start',
+                    'preserve_original': True,
+                    'convert_to_mp3': True
+                }
+
+    def update_audio_metadata_enabled(self, task_id: int, enabled: bool) -> bool:
+        """Enable/disable audio metadata processing for a task"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT OR REPLACE INTO task_audio_metadata_settings (
+                    task_id, enabled, template, album_art_enabled, album_art_path, apply_art_to_all,
+                    audio_merge_enabled, intro_audio_path, outro_audio_path, intro_position,
+                    preserve_original, convert_to_mp3, updated_at
+                )
+                SELECT ?, ?, COALESCE(template, 'default'), COALESCE(album_art_enabled, FALSE), COALESCE(album_art_path, NULL),
+                       COALESCE(apply_art_to_all, FALSE), COALESCE(audio_merge_enabled, FALSE), COALESCE(intro_audio_path, NULL),
+                       COALESCE(outro_audio_path, NULL), COALESCE(intro_position, 'start'), COALESCE(preserve_original, TRUE),
+                       COALESCE(convert_to_mp3, TRUE), CURRENT_TIMESTAMP
+                FROM task_audio_metadata_settings WHERE task_id = ?
+                UNION SELECT ?, ?, 'default', FALSE, NULL, FALSE, FALSE, NULL, NULL, 'start', TRUE, TRUE, CURRENT_TIMESTAMP
+                WHERE NOT EXISTS (SELECT 1 FROM task_audio_metadata_settings WHERE task_id = ?)
+            ''', (task_id, enabled, task_id, task_id, enabled, task_id))
+            conn.commit()
+            return True
+
+    def update_audio_metadata_template(self, task_id: int, template_name: str) -> bool:
+        """Set audio metadata template for a task"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT OR REPLACE INTO task_audio_metadata_settings (
+                    task_id, enabled, template, album_art_enabled, album_art_path, apply_art_to_all,
+                    audio_merge_enabled, intro_audio_path, outro_audio_path, intro_position,
+                    preserve_original, convert_to_mp3, updated_at
+                )
+                SELECT ?, COALESCE(enabled, FALSE), ?, COALESCE(album_art_enabled, FALSE), COALESCE(album_art_path, NULL),
+                       COALESCE(apply_art_to_all, FALSE), COALESCE(audio_merge_enabled, FALSE), COALESCE(intro_audio_path, NULL),
+                       COALESCE(outro_audio_path, NULL), COALESCE(intro_position, 'start'), COALESCE(preserve_original, TRUE),
+                       COALESCE(convert_to_mp3, TRUE), CURRENT_TIMESTAMP
+                FROM task_audio_metadata_settings WHERE task_id = ?
+                UNION SELECT ?, FALSE, ?, FALSE, NULL, FALSE, FALSE, NULL, NULL, 'start', TRUE, TRUE, CURRENT_TIMESTAMP
+                WHERE NOT EXISTS (SELECT 1 FROM task_audio_metadata_settings WHERE task_id = ?)
+            ''', (task_id, template_name, task_id, task_id, template_name, task_id))
+            conn.commit()
+            return True
+
+    def set_album_art_settings(self, task_id: int, enabled: Optional[bool] = None, path: Optional[str] = None, apply_to_all: Optional[bool] = None) -> bool:
+        """Update album art settings for a task"""
+        current = self.get_audio_metadata_settings(task_id)
+        new_values = {
+            'enabled': current['enabled'],
+            'template': current['template'],
+            'album_art_enabled': current['album_art_enabled'] if enabled is None else bool(enabled),
+            'album_art_path': current['album_art_path'] if path is None else path,
+            'apply_art_to_all': current['apply_art_to_all'] if apply_to_all is None else bool(apply_to_all),
+            'audio_merge_enabled': current['audio_merge_enabled'],
+            'intro_audio_path': current['intro_audio_path'],
+            'outro_audio_path': current['outro_audio_path'],
+            'intro_position': current['intro_position'],
+            'preserve_original': current['preserve_original'],
+            'convert_to_mp3': current['convert_to_mp3']
+        }
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT OR REPLACE INTO task_audio_metadata_settings (
+                    task_id, enabled, template, album_art_enabled, album_art_path, apply_art_to_all,
+                    audio_merge_enabled, intro_audio_path, outro_audio_path, intro_position,
+                    preserve_original, convert_to_mp3, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ''', (task_id, new_values['enabled'], new_values['template'], new_values['album_art_enabled'],
+                  new_values['album_art_path'], new_values['apply_art_to_all'], new_values['audio_merge_enabled'],
+                  new_values['intro_audio_path'], new_values['outro_audio_path'], new_values['intro_position'],
+                  new_values['preserve_original'], new_values['convert_to_mp3']))
+            conn.commit()
+            return True
+
+    def set_audio_merge_settings(self, task_id: int, enabled: Optional[bool] = None, intro_path: Optional[str] = None, outro_path: Optional[str] = None, intro_position: Optional[str] = None) -> bool:
+        """Update audio merge settings for a task"""
+        current = self.get_audio_metadata_settings(task_id)
+        new_values = {
+            'enabled': current['enabled'],
+            'template': current['template'],
+            'album_art_enabled': current['album_art_enabled'],
+            'album_art_path': current['album_art_path'],
+            'apply_art_to_all': current['apply_art_to_all'],
+            'audio_merge_enabled': current['audio_merge_enabled'] if enabled is None else bool(enabled),
+            'intro_audio_path': current['intro_audio_path'] if intro_path is None else intro_path,
+            'outro_audio_path': current['outro_audio_path'] if outro_path is None else outro_path,
+            'intro_position': current['intro_position'] if intro_position is None else intro_position,
+            'preserve_original': current['preserve_original'],
+            'convert_to_mp3': current['convert_to_mp3']
+        }
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT OR REPLACE INTO task_audio_metadata_settings (
+                    task_id, enabled, template, album_art_enabled, album_art_path, apply_art_to_all,
+                    audio_merge_enabled, intro_audio_path, outro_audio_path, intro_position,
+                    preserve_original, convert_to_mp3, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ''', (task_id, new_values['enabled'], new_values['template'], new_values['album_art_enabled'],
+                  new_values['album_art_path'], new_values['apply_art_to_all'], new_values['audio_merge_enabled'],
+                  new_values['intro_audio_path'], new_values['outro_audio_path'], new_values['intro_position'],
+                  new_values['preserve_original'], new_values['convert_to_mp3']))
+            conn.commit()
+            return True
+
+    def set_audio_quality_settings(self, task_id: int, preserve_original: Optional[bool] = None, convert_to_mp3: Optional[bool] = None) -> bool:
+        """Update audio quality/format settings for a task"""
+        current = self.get_audio_metadata_settings(task_id)
+        new_values = {
+            'enabled': current['enabled'],
+            'template': current['template'],
+            'album_art_enabled': current['album_art_enabled'],
+            'album_art_path': current['album_art_path'],
+            'apply_art_to_all': current['apply_art_to_all'],
+            'audio_merge_enabled': current['audio_merge_enabled'],
+            'intro_audio_path': current['intro_audio_path'],
+            'outro_audio_path': current['outro_audio_path'],
+            'intro_position': current['intro_position'],
+            'preserve_original': current['preserve_original'] if preserve_original is None else bool(preserve_original),
+            'convert_to_mp3': current['convert_to_mp3'] if convert_to_mp3 is None else bool(convert_to_mp3)
+        }
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT OR REPLACE INTO task_audio_metadata_settings (
+                    task_id, enabled, template, album_art_enabled, album_art_path, apply_art_to_all,
+                    audio_merge_enabled, intro_audio_path, outro_audio_path, intro_position,
+                    preserve_original, convert_to_mp3, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ''', (task_id, new_values['enabled'], new_values['template'], new_values['album_art_enabled'],
+                  new_values['album_art_path'], new_values['apply_art_to_all'], new_values['audio_merge_enabled'],
+                  new_values['intro_audio_path'], new_values['outro_audio_path'], new_values['intro_position'],
+                  new_values['preserve_original'], new_values['convert_to_mp3']))
+            conn.commit()
+            return True
 

@@ -1990,14 +1990,8 @@ class UserbotService:
         - الحفاظ على الجودة 100%
         """
         try:
-            # Get audio metadata settings (implement this in database)
-            # For now, we'll use default settings
-            audio_settings = {
-                'enabled': False,
-                'template': 'default',
-                'album_art_enabled': False,
-                'audio_merge_enabled': False
-            }
+            # Load audio metadata settings from database
+            audio_settings = self.db.get_audio_metadata_settings(task_id)
             
             if not audio_settings.get('enabled', False):
                 logger.info(f"🎵 الوسوم الصوتية معطلة للمهمة {task_id}")
@@ -2025,10 +2019,22 @@ class UserbotService:
             metadata_template = template_data['template']
             
             # Process audio metadata
+            album_art_path = None
+            if audio_settings.get('album_art_enabled') and audio_settings.get('album_art_path'):
+                album_art_path = audio_settings.get('album_art_path')
+            intro_path = audio_settings.get('intro_audio_path') if audio_settings.get('audio_merge_enabled') else None
+            outro_path = audio_settings.get('outro_audio_path') if audio_settings.get('audio_merge_enabled') else None
+            intro_position = audio_settings.get('intro_position', 'start')
+
             processed_audio = self.audio_processor.process_audio_once_for_all_targets(
                 media_bytes,
                 file_name,
                 metadata_template,
+                album_art_path=album_art_path,
+                apply_art_to_all=bool(audio_settings.get('apply_art_to_all', False)),
+                audio_intro_path=intro_path,
+                audio_outro_path=outro_path,
+                intro_position=intro_position,
                 task_id=task_id
             )
             
