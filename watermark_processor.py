@@ -1,12 +1,13 @@
 """
-وحدة معالجة العلامة المائية للصور والفيديوهات - الإصدار المحسن
+وحدة معالجة العلامة المائية للصور والفيديوهات - الإصدار المحسن والمُصلح
 تدعم إضافة علامة مائية نصية أو صورة مع إعدادات مخصصة
 
-التحسينات الرئيسية:
-1. معالجة الوسائط مرة واحدة وإعادة استخدامها لكل الأهداف
-2. تحسين ضغط الفيديو مع الحفاظ على الجودة
-3. إرسال الفيديو بصيغة MP4
-4. ذاكرة مؤقتة ذكية لتحسين الأداء
+التحسينات والإصلاحات:
+1. إصلاح مشكلة عدم تطبيق العلامة المائية على الصور
+2. تحسين معالجة الفيديو وحل مشكلة المعاينة
+3. تحسين ضغط الفيديو لتقليل الحجم
+4. إصلاح مشاكل الذاكرة المؤقتة
+5. تحسين معالجة الأخطاء
 
 المتطلبات:
 - FFmpeg لتحسين الفيديو
@@ -22,19 +23,23 @@ from typing import Optional, Tuple, Union, Dict, Any
 import tempfile
 import subprocess
 import json
+import hashlib
+import time
 
 logger = logging.getLogger(__name__)
 
 class WatermarkProcessor:
-    """معالج العلامة المائية للصور والفيديوهات - محسن"""
+    """معالج العلامة المائية للصور والفيديوهات - محسن ومُصلح"""
     
     def __init__(self):
         """تهيئة معالج العلامة المائية"""
         self.supported_image_formats = ['.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.webp']
         self.supported_video_formats = ['.mp4', '.avi', '.mov', '.mkv', '.wmv', '.flv', '.webm']
         
-        # Cache للملفات المعالجة مسبقاً
+        # Cache للملفات المعالجة مسبقاً مع تحسين
         self.processed_media_cache = {}
+        self.cache_max_size = 100  # زيادة حجم الذاكرة المؤقتة
+        self.cache_cleanup_threshold = 80
         
         # التحقق من توفر FFmpeg
         self.ffmpeg_available = self._check_ffmpeg_availability()
@@ -43,19 +48,45 @@ class WatermarkProcessor:
             logger.info("✅ FFmpeg متوفر - سيتم استخدامه لتحسين الفيديو")
         else:
             logger.warning("⚠️ FFmpeg غير متوفر - سيتم استخدام OpenCV كبديل")
+        
+        # إعدادات افتراضية محسنة
+        self.default_video_quality = 'medium'
+        self.default_video_crf = 23
+        self.default_audio_bitrate = '128k'
+        
+        logger.info("🚀 تم تهيئة معالج العلامة المائية بنجاح")
     
     def _check_ffmpeg_availability(self) -> bool:
         """التحقق من توفر FFmpeg في النظام"""
         try:
             # التحقق من توفر ffmpeg
-            result = subprocess.run(['ffmpeg', '-version'], capture_output=True, text=True)
+            result = subprocess.run(['ffmpeg', '-version'], capture_output=True, text=True, timeout=10)
             if result.returncode == 0:
                 # التحقق من توفر ffprobe
-                result_probe = subprocess.run(['ffprobe', '-version'], capture_output=True, text=True)
+                result_probe = subprocess.run(['ffprobe', '-version'], capture_output=True, text=True, timeout=10)
                 return result_probe.returncode == 0
             return False
-        except (subprocess.CalledProcessError, FileNotFoundError):
+        except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
             return False
+    
+    def _generate_cache_key(self, media_bytes: bytes, file_name: str, watermark_settings: dict, task_id: int) -> str:
+        """إنشاء مفتاح فريد للذاكرة المؤقتة"""
+        # إنشاء hash من البيانات والإعدادات
+        content_hash = hashlib.md5(media_bytes).hexdigest()
+        settings_hash = hashlib.md5(json.dumps(watermark_settings, sort_keys=True).encode()).hexdigest()
+        return f"{task_id}_{content_hash}_{settings_hash}_{file_name}"
+    
+    def _cleanup_cache(self):
+        """تنظيف الذاكرة المؤقتة إذا أصبحت كبيرة جداً"""
+        if len(self.processed_media_cache) > self.cache_cleanup_threshold:
+            # حذف أقدم 20% من العناصر
+            items_to_remove = int(len(self.processed_media_cache) * 0.2)
+            oldest_keys = list(self.processed_media_cache.keys())[:items_to_remove]
+            
+            for key in oldest_keys:
+                del self.processed_media_cache[key]
+            
+            logger.info(f"🧹 تم تنظيف الذاكرة المؤقتة: حذف {items_to_remove} عنصر")
     
     def calculate_position(self, base_size: Tuple[int, int], watermark_size: Tuple[int, int], position: str, offset_x: int = 0, offset_y: int = 0) -> Tuple[int, int]:
         """حساب موقع العلامة المائية على الصورة/الفيديو مع الإزاحة اليدوية"""
@@ -87,7 +118,7 @@ class WatermarkProcessor:
     
     def create_text_watermark(self, text: str, font_size: int, color: str, opacity: int, 
                             image_size: Tuple[int, int]) -> Image.Image:
-        """إنشاء علامة مائية نصية"""
+        """إنشاء علامة مائية نصية محسنة"""
         try:
             # إنشاء صورة شفافة للنص
             img_width, img_height = image_size
@@ -98,106 +129,81 @@ class WatermarkProcessor:
             # محاولة استخدام خط عربي إذا أمكن
             font = None
             try:
-                # البحث عن خط عربي في النظام
-                font_paths = [
-                    "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
-                    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-                    "/System/Library/Fonts/Arial.ttf",
-                    "arial.ttf"
-                ]
-                
-                for font_path in font_paths:
-                    if os.path.exists(font_path):
-                        font = ImageFont.truetype(font_path, calculated_font_size)
-                        break
-            except Exception:
-                pass
+                # محاولة استخدام خط عربي
+                font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", calculated_font_size)
+            except:
+                try:
+                    # محاولة استخدام خط عربي آخر
+                    font = ImageFont.truetype("/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf", calculated_font_size)
+                except:
+                    try:
+                        # استخدام الخط الافتراضي
+                        font = ImageFont.load_default()
+                        # تكبير الخط الافتراضي
+                        font = font.font_variant(size=calculated_font_size)
+                    except:
+                        # إنشاء خط بسيط
+                        font = ImageFont.load_default()
             
-            if font is None:
-                font = ImageFont.load_default()
+            # إنشاء صورة شفافة
+            watermark_img = Image.new('RGBA', (img_width, img_height), (0, 0, 0, 0))
+            draw = ImageDraw.Draw(watermark_img)
             
             # حساب حجم النص
-            dummy_img = Image.new('RGBA', (1, 1))
-            dummy_draw = ImageDraw.Draw(dummy_img)
-            text_bbox = dummy_draw.textbbox((0, 0), text, font=font)
-            text_width = text_bbox[2] - text_bbox[0]
-            text_height = text_bbox[3] - text_bbox[1]
+            bbox = draw.textbbox((0, 0), text, font=font)
+            text_width = bbox[2] - bbox[0]
+            text_height = bbox[3] - bbox[1]
             
-            # إنشاء صورة للنص مع خلفية شفافة
-            text_img = Image.new('RGBA', (int(text_width + 20), int(text_height + 10)), (0, 0, 0, 0))
-            text_draw = ImageDraw.Draw(text_img)
+            # إنشاء صورة بحجم النص فقط
+            watermark_img = Image.new('RGBA', (text_width + 20, text_height + 20), (0, 0, 0, 0))
+            draw = ImageDraw.Draw(watermark_img)
             
-            # تحويل اللون إلى RGBA مع الشفافية
-            try:
-                if color.startswith('#'):
-                    rgb_color = ImageColor.getcolor(color, "RGB")
-                    rgba_color = rgb_color + (int(255 * opacity / 100),)
-                else:
-                    rgba_color = (255, 255, 255, int(255 * opacity / 100))
-            except Exception:
-                rgba_color = (255, 255, 255, int(255 * opacity / 100))
+            # إضافة خلفية شفافة للنص
+            if opacity < 100:
+                # إنشاء خلفية شفافة
+                background_opacity = int((100 - opacity) * 255 / 100)
+                background = Image.new('RGBA', watermark_img.size, (0, 0, 0, background_opacity))
+                watermark_img = Image.alpha_composite(background, watermark_img)
             
             # رسم النص
-            text_draw.text((10, 5), text, font=font, fill=rgba_color)
+            try:
+                # محاولة استخدام اللون المحدد
+                text_color = ImageColor.getrgb(color)
+                draw.text((10, 10), text, fill=text_color + (255,), font=font)
+            except:
+                # استخدام اللون الأبيض كبديل
+                draw.text((10, 10), text, fill=(255, 255, 255, 255), font=font)
             
-            return text_img
+            logger.info(f"✅ تم إنشاء علامة مائية نصية: '{text}', الحجم: {watermark_img.size}")
+            return watermark_img
             
         except Exception as e:
             logger.error(f"خطأ في إنشاء العلامة المائية النصية: {e}")
-            return None
+            # إنشاء علامة مائية بسيطة كبديل
+            try:
+                watermark_img = Image.new('RGBA', (200, 50), (0, 0, 0, 0))
+                draw = ImageDraw.Draw(watermark_img)
+                draw.text((10, 10), text[:20], fill=(255, 255, 255, 255))
+                return watermark_img
+            except:
+                return None
     
-    def calculate_smart_watermark_size(self, base_image_size: Tuple[int, int], watermark_size: Tuple[int, int], 
-                                     size_percentage: int, position: str = 'bottom_right') -> Tuple[int, int]:
-        """حساب حجم العلامة المائية الذكي حسب أبعاد الصورة والموضع"""
+    def calculate_smart_watermark_size(self, base_image_size: Tuple[int, int], watermark_size: Tuple[int, int],
+                                     size_percentage: int, position: str) -> Tuple[int, int]:
+        """حساب حجم ذكي للعلامة المائية بناءً على موضعها"""
         base_width, base_height = base_image_size
         watermark_width, watermark_height = watermark_size
         
-        # الحفاظ على النسبة الأصلية للعلامة المائية
+        # حساب النسبة المئوية من حجم الصورة الأساسية
+        base_area = base_width * base_height
+        target_area = base_area * (size_percentage / 100)
+        
+        # الحفاظ على نسبة الأبعاد
         aspect_ratio = watermark_width / watermark_height
         
-        # حساب الحجم بناءً على النسبة المئوية المطلوبة
-        scale_factor = size_percentage / 100.0
-        
-        if size_percentage == 100:
-            # للحجم 100%، استخدم كامل أبعاد الصورة الأساسية مع هامش صغير فقط
-            new_width = int(base_width * 0.98)  # 98% لترك هامش صغير جداً
-            new_height = int(base_height * 0.98)  # 98% لترك هامش صغير جداً
-            
-            # الحفاظ على النسبة إذا أمكن، وإلا استخدم الحجم الكامل
-            calculated_height_from_width = int(new_width / aspect_ratio)
-            calculated_width_from_height = int(new_height * aspect_ratio)
-            
-            # اختر الحجم الذي يحقق أقصى استفادة من المساحة
-            if calculated_height_from_width <= new_height:
-                # يمكن استخدام العرض الكامل
-                new_height = calculated_height_from_width
-            else:
-                # استخدم الارتفاع الكامل وحساب العرض
-                new_width = calculated_width_from_height
-                
-            logger.info(f"🎯 حجم 100%: أبعاد الصورة {base_image_size} → أبعاد العلامة {(new_width, new_height)}")
-        else:
-            # للنسب المئوية الأخرى، حساب عادي
-            if position in ['top', 'bottom', 'center']:
-                # للمواضع الأفقية، استخدم النسبة المئوية كاملة من العرض
-                new_width = int(base_width * scale_factor)
-            else:
-                # للمواضع الركنية، استخدم نسبة معدلة
-                new_width = int(base_width * scale_factor * 0.8)
-            
-            new_height = int(new_width / aspect_ratio)
-            
-            # تطبيق حدود معقولة للأحجام الأخرى
-            max_allowed_width = base_width * 0.9  
-            max_allowed_height = base_height * 0.7
-            
-            if new_width > max_allowed_width:
-                new_width = int(max_allowed_width)
-                new_height = int(new_width / aspect_ratio)
-                
-            if new_height > max_allowed_height:
-                new_height = int(max_allowed_height)
-                new_width = int(new_height * aspect_ratio)
+        # حساب الأبعاد الجديدة
+        new_height = int((target_area / aspect_ratio) ** 0.5)
+        new_width = int(new_height * aspect_ratio)
         
         # تأكد من الحد الأدنى للحجم
         min_size = 20
@@ -250,7 +256,7 @@ class WatermarkProcessor:
             return None
     
     def apply_watermark_to_image(self, image_bytes: bytes, watermark_settings: dict) -> Optional[bytes]:
-        """تطبيق العلامة المائية على صورة"""
+        """تطبيق العلامة المائية على صورة - مُصلح"""
         try:
             # تحميل الصورة
             image = Image.open(io.BytesIO(image_bytes))
@@ -262,21 +268,24 @@ class WatermarkProcessor:
             # إنشاء العلامة المائية
             watermark = None
             
-            if watermark_settings['watermark_type'] == 'text' and watermark_settings['watermark_text']:
-                color = watermark_settings['text_color'] if not watermark_settings['use_original_color'] else '#FFFFFF'
+            if watermark_settings['watermark_type'] == 'text' and watermark_settings.get('watermark_text'):
+                color = watermark_settings.get('text_color', '#FFFFFF')
+                if watermark_settings.get('use_original_color', False):
+                    color = '#FFFFFF'  # استخدام اللون الأبيض كافتراضي
+                
                 watermark = self.create_text_watermark(
                     watermark_settings['watermark_text'],
-                    watermark_settings['font_size'],
+                    watermark_settings.get('font_size', 32),
                     color,
-                    watermark_settings['opacity'],
+                    watermark_settings.get('opacity', 70),
                     image.size
                 )
             
-            elif watermark_settings['watermark_type'] == 'image' and watermark_settings['watermark_image_path']:
+            elif watermark_settings['watermark_type'] == 'image' and watermark_settings.get('watermark_image_path'):
                 watermark = self.load_image_watermark(
                     watermark_settings['watermark_image_path'],
-                    watermark_settings['size_percentage'],
-                    watermark_settings['opacity'],
+                    watermark_settings.get('size_percentage', 20),
+                    watermark_settings.get('opacity', 70),
                     image.size,
                     watermark_settings.get('position', 'bottom_right')
                 )
@@ -288,7 +297,7 @@ class WatermarkProcessor:
             # حساب موقع العلامة المائية مع الإزاحة اليدوية
             offset_x = watermark_settings.get('offset_x', 0)
             offset_y = watermark_settings.get('offset_y', 0)
-            position = self.calculate_position(image.size, watermark.size, watermark_settings['position'], offset_x, offset_y)
+            position = self.calculate_position(image.size, watermark.size, watermark_settings.get('position', 'bottom_right'), offset_x, offset_y)
             
             # تطبيق العلامة المائية
             if image.mode == 'RGBA':
@@ -325,6 +334,7 @@ class WatermarkProcessor:
                 # في حالة فشل تحديد التنسيق، استخدم PNG
                 image.save(output, format='PNG', optimize=True)
                 
+            logger.info(f"✅ تم تطبيق العلامة المائية على الصورة بنجاح")
             return output.getvalue()
             
         except Exception as e:
@@ -406,7 +416,7 @@ class WatermarkProcessor:
             return {}
     
     def optimize_video_compression(self, input_path: str, output_path: str, target_size_mb: float = None) -> bool:
-        """تحسين ضغط الفيديو مع الحفاظ على الجودة"""
+        """تحسين ضغط الفيديو مع الحفاظ على الجودة - محسن"""
         try:
             # الحصول على معلومات الفيديو الأصلي
             video_info = self.get_video_info(input_path)
@@ -426,8 +436,8 @@ class WatermarkProcessor:
                 target_bitrate = int((target_size_mb * 8 * 1024 * 1024) / video_info['duration'])
                 target_bitrate = max(target_bitrate, 500000)  # حد أدنى 500 kbps
             else:
-                # استخدام معدل البت الأصلي مع تحسين بسيط
-                target_bitrate = int(original_bitrate * 0.9)  # تقليل 10% للحفاظ على الجودة
+                # استخدام معدل البت الأصلي مع تحسين كبير
+                target_bitrate = int(original_bitrate * 0.7)  # تقليل 30% للحصول على حجم أصغر
             
             # استخدام FFmpeg إذا كان متوفراً
             if self.ffmpeg_available:
@@ -437,12 +447,13 @@ class WatermarkProcessor:
                         'ffmpeg', '-i', input_path,
                         '-c:v', 'libx264',  # كودك H.264
                         '-preset', 'medium',  # توازن بين السرعة والجودة
-                        '-crf', '23',  # جودة ثابتة (18-28 جيد، 23 مثالي)
+                        '-crf', '25',  # جودة ثابتة محسنة (25 بدلاً من 23)
                         '-maxrate', f'{target_bitrate}',
                         '-bufsize', f'{target_bitrate * 2}',
                         '-c:a', 'aac',  # كودك الصوت
-                        '-b:a', '128k',  # معدل بت الصوت
+                        '-b:a', '96k',  # معدل بت صوت أقل
                         '-movflags', '+faststart',  # تحسين التشغيل
+                        '-pix_fmt', 'yuv420p',  # تنسيق بكسل متوافق
                         '-y',  # استبدال الملف الموجود
                         output_path
                     ]
@@ -450,7 +461,7 @@ class WatermarkProcessor:
                     logger.info(f"🎬 بدء تحسين الفيديو باستخدام FFmpeg: معدل البت المستهدف {target_bitrate/1000:.0f} kbps")
                     
                     # تنفيذ الضغط
-                    result = subprocess.run(cmd, capture_output=True, text=True)
+                    result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
                     
                     if result.returncode == 0:
                         # التحقق من النتيجة
@@ -660,13 +671,16 @@ class WatermarkProcessor:
             # تحضير العلامة المائية
             watermark_img = None
             
-            if watermark_settings['watermark_type'] == 'text' and watermark_settings['watermark_text']:
-                color = watermark_settings['text_color'] if not watermark_settings['use_original_color'] else '#FFFFFF'
+            if watermark_settings['watermark_type'] == 'text' and watermark_settings.get('watermark_text'):
+                color = watermark_settings.get('text_color', '#FFFFFF')
+                if watermark_settings.get('use_original_color', False):
+                    color = '#FFFFFF'  # استخدام اللون الأبيض كافتراضي
+                
                 watermark_pil = self.create_text_watermark(
                     watermark_settings['watermark_text'],
-                    watermark_settings['font_size'],
+                    watermark_settings.get('font_size', 32),
                     color,
-                    watermark_settings['opacity'],
+                    watermark_settings.get('opacity', 70),
                     (width, height)
                 )
                 
@@ -675,11 +689,11 @@ class WatermarkProcessor:
                     watermark_cv = cv2.cvtColor(np.array(watermark_pil), cv2.COLOR_RGBA2BGRA)
                     watermark_img = watermark_cv
                     
-            elif watermark_settings['watermark_type'] == 'image' and watermark_settings['watermark_image_path']:
+            elif watermark_settings['watermark_type'] == 'image' and watermark_settings.get('watermark_image_path'):
                 watermark_pil = self.load_image_watermark(
                     watermark_settings['watermark_image_path'],
-                    watermark_settings['size_percentage'],
-                    watermark_settings['opacity'],
+                    watermark_settings.get('size_percentage', 20),
+                    watermark_settings.get('opacity', 70),
                     (width, height),
                     watermark_settings.get('position', 'bottom_right')
                 )
@@ -698,7 +712,7 @@ class WatermarkProcessor:
                 watermark_position = self.calculate_position(
                     (width, height), 
                     (watermark_width, watermark_height), 
-                    watermark_settings['position'], 
+                    watermark_settings.get('position', 'bottom_right'), 
                     offset_x, 
                     offset_y
                 )
@@ -814,23 +828,28 @@ class WatermarkProcessor:
             return None
     
     def should_apply_watermark(self, media_type: str, watermark_settings: dict) -> bool:
-        """تحديد ما إذا كان يجب تطبيق العلامة المائية على نوع الوسائط"""
+        """تحديد ما إذا كان يجب تطبيق العلامة المائية على نوع الوسائط - مُصلح"""
         if not watermark_settings.get('enabled', False):
+            logger.debug("🏷️ العلامة المائية معطلة")
             return False
         
         if media_type == 'photo' and not watermark_settings.get('apply_to_photos', True):
+            logger.debug("🏷️ العلامة المائية لا تطبق على الصور")
             return False
         
         if media_type == 'video' and not watermark_settings.get('apply_to_videos', True):
+            logger.debug("🏷️ العلامة المائية لا تطبق على الفيديوهات")
             return False
         
         if media_type == 'document' and not watermark_settings.get('apply_to_documents', False):
+            logger.debug("🏷️ العلامة المائية لا تطبق على المستندات")
             return False
         
+        logger.debug(f"🏷️ العلامة المائية سيطبق على {media_type}")
         return True
     
     def get_media_type_from_file(self, file_path: str) -> str:
-        """تحديد نوع الوسائط من امتداد الملف"""
+        """تحديد نوع الوسائط من امتداد الملف - مُصلح"""
         ext = os.path.splitext(file_path.lower())[1]
         
         if ext in self.supported_image_formats:
@@ -841,15 +860,22 @@ class WatermarkProcessor:
             return 'document'
     
     def process_media_with_watermark(self, media_bytes: bytes, file_name: str, watermark_settings: dict) -> Optional[bytes]:
-        """معالجة الوسائط مع العلامة المائية"""
+        """معالجة الوسائط مع العلامة المائية - مُصلح"""
         try:
             # تحديد نوع الوسائط
             media_type = self.get_media_type_from_file(file_name)
+            logger.info(f"🎬 معالجة {media_type}: {file_name}")
             
-            if media_type == 'image':
+            if media_type == 'photo':
                 # معالجة الصور
                 logger.info(f"🖼️ معالجة صورة: {file_name}")
-                return self.apply_watermark_to_image(media_bytes, watermark_settings)
+                result = self.apply_watermark_to_image(media_bytes, watermark_settings)
+                if result:
+                    logger.info(f"✅ تم معالجة الصورة بنجاح: {file_name}")
+                    return result
+                else:
+                    logger.warning(f"⚠️ فشل في معالجة الصورة: {file_name}")
+                    return media_bytes
                 
             elif media_type == 'video':
                 # معالجة الفيديوهات
@@ -886,6 +912,7 @@ class WatermarkProcessor:
                         if final_path != watermarked_path and os.path.exists(final_path):
                             os.unlink(final_path)
                         
+                        logger.info(f"✅ تم معالجة الفيديو بنجاح: {file_name}")
                         return watermarked_bytes
                     else:
                         logger.warning("فشل في تطبيق العلامة المائية على الفيديو")
@@ -906,15 +933,31 @@ class WatermarkProcessor:
     
     def process_media_once_for_all_targets(self, media_bytes: bytes, file_name: str, watermark_settings: dict, 
                                          task_id: int) -> Optional[bytes]:
-        """معالجة الوسائط مرة واحدة وإعادة استخدامها لكل الأهداف"""
+        """معالجة الوسائط مرة واحدة وإعادة استخدامها لكل الأهداف - مُصلح"""
         try:
             # إنشاء مفتاح فريد للملف
-            cache_key = f"{task_id}_{hash(media_bytes)}_{file_name}"
+            cache_key = self._generate_cache_key(media_bytes, file_name, watermark_settings, task_id)
             
             # التحقق من وجود الملف في الذاكرة المؤقتة
             if cache_key in self.processed_media_cache:
                 logger.info(f"🔄 إعادة استخدام الوسائط المعالجة مسبقاً للمهمة {task_id}")
                 return self.processed_media_cache[cache_key]
+            
+            # التحقق من أن العلامة المائية مفعلة
+            if not watermark_settings.get('enabled', False):
+                logger.info(f"🏷️ العلامة المائية معطلة للمهمة {task_id}")
+                self.processed_media_cache[cache_key] = media_bytes
+                return media_bytes
+            
+            # تحديد نوع الوسائط
+            media_type = self.get_media_type_from_file(file_name)
+            logger.info(f"🎬 نوع الوسائط: {media_type}, اسم الملف: {file_name}")
+            
+            # التحقق من تطبيق العلامة المائية على نوع الوسائط
+            if not self.should_apply_watermark(media_type, watermark_settings):
+                logger.info(f"🏷️ العلامة المائية لا تطبق على {media_type} للمهمة {task_id}")
+                self.processed_media_cache[cache_key] = media_bytes
+                return media_bytes
             
             # معالجة الوسائط
             processed_media = self.process_media_with_watermark(media_bytes, file_name, watermark_settings)
@@ -925,16 +968,12 @@ class WatermarkProcessor:
                 logger.info(f"✅ تم معالجة الوسائط وحفظها في الذاكرة المؤقتة للمهمة {task_id}")
                 
                 # تنظيف الذاكرة المؤقتة إذا أصبحت كبيرة جداً
-                if len(self.processed_media_cache) > 50:
-                    # حذف أقدم 10 عناصر
-                    oldest_keys = list(self.processed_media_cache.keys())[:10]
-                    for key in oldest_keys:
-                        del self.processed_media_cache[key]
-                    logger.info("🧹 تم تنظيف الذاكرة المؤقتة")
+                self._cleanup_cache()
                 
                 return processed_media
             else:
                 # إذا لم يتم تطبيق العلامة المائية، احفظ الملف الأصلي
+                logger.warning(f"⚠️ فشل في معالجة الوسائط للمهمة {task_id}")
                 self.processed_media_cache[cache_key] = media_bytes
                 return media_bytes
                 
@@ -944,18 +983,21 @@ class WatermarkProcessor:
     
     def clear_cache(self):
         """مسح الذاكرة المؤقتة"""
+        cache_size = len(self.processed_media_cache)
         self.processed_media_cache.clear()
-        logger.info("🧹 تم مسح الذاكرة المؤقتة للعلامة المائية")
+        logger.info(f"🧹 تم مسح الذاكرة المؤقتة للعلامة المائية ({cache_size} عنصر)")
     
     def get_cache_stats(self):
         """الحصول على إحصائيات الذاكرة المؤقتة"""
         return {
             'cache_size': len(self.processed_media_cache),
-            'cache_keys': list(self.processed_media_cache.keys())
+            'cache_keys': list(self.processed_media_cache.keys()),
+            'cache_max_size': self.cache_max_size,
+            'cleanup_threshold': self.cache_cleanup_threshold
         }
 
     def compress_video_preserve_quality(self, input_path: str, output_path: str, target_size_mb: float = None) -> bool:
-        """ضغط الفيديو مع الحفاظ على الدقة والجودة"""
+        """ضغط الفيديو مع الحفاظ على الدقة والجودة - محسن لحل مشكلة الحجم الكبير"""
         try:
             if not self.ffmpeg_available:
                 logger.warning("FFmpeg غير متوفر، لا يمكن ضغط الفيديو")
@@ -975,7 +1017,7 @@ class WatermarkProcessor:
             
             logger.info(f"📹 معلومات الفيديو الأصلي: {original_width}x{original_height}, {original_fps} FPS, {original_size:.2f} MB")
             
-            # حساب معدل البت الأمثل
+            # حساب معدل البت الأمثل لضغط أفضل
             if target_size_mb and original_size > target_size_mb:
                 # حساب معدل البت المطلوب للوصول للحجم المستهدف
                 target_bitrate = int((target_size_mb * 8 * 1024 * 1024) / duration)
@@ -983,68 +1025,244 @@ class WatermarkProcessor:
                 
                 logger.info(f"🎯 الحجم المستهدف: {target_size_mb:.2f} MB, معدل البت: {target_bitrate/1000:.0f} kbps")
             else:
-                # استخدام معدل البت الأصلي مع تحسين بسيط
-                target_bitrate = int(video_info.get('bitrate', 2000000) * 0.8)  # تقليل 20%
-                logger.info(f"🔄 تحسين بسيط: معدل البت {target_bitrate/1000:.0f} kbps")
+                # استخدام معدل البت الأصلي مع تحسين كبير
+                original_bitrate = video_info.get('bitrate', 2000000)
+                target_bitrate = int(original_bitrate * 0.6)  # تقليل 40% للحصول على حجم أصغر
+                logger.info(f"🔄 تحسين كبير: معدل البت {target_bitrate/1000:.0f} kbps (تقليل 40%)")
             
-            # إعدادات FFmpeg محسنة للحفاظ على الجودة
+            # إعدادات FFmpeg محسنة للحصول على حجم أصغر مع الحفاظ على الجودة
             cmd = [
                 'ffmpeg', '-y',
                 '-i', input_path,
-                # إعدادات الفيديو - الحفاظ على الدقة
+                # إعدادات الفيديو - ضغط محسن
                 '-c:v', 'libx264',           # كودك H.264
-                '-preset', 'slow',           # بطيء للحصول على جودة أفضل
-                '-crf', '18',                # جودة عالية (18 = جودة ممتازة)
+                '-preset', 'slow',           # بطيء للحصول على ضغط أفضل
+                '-crf', '25',                # جودة عالية مع ضغط أفضل (25 بدلاً من 18)
                 '-maxrate', f'{target_bitrate}',
                 '-bufsize', f'{target_bitrate * 2}',
-                '-profile:v', 'high',        # ملف H.264 عالي
-                '-level', '4.1',             # مستوى متوافق
-                # إعدادات الصوت
+                '-profile:v', 'main',        # ملف H.264 متوسط (أصغر من high)
+                '-level', '4.0',             # مستوى H.264 متوسط
+                # إعدادات الصوت - ضغط محسن
                 '-c:a', 'aac',               # كودك الصوت
-                '-b:a', '128k',              # معدل بت الصوت
-                '-ar', '48000',              # معدل العينات
-                # إعدادات إضافية
+                '-b:a', '96k',               # معدل بت صوت أقل (96k بدلاً من 128k)
+                '-ar', '44100',              # معدل عينات قياسي
+                # إعدادات إضافية للضغط
                 '-movflags', '+faststart',   # تحسين التشغيل
                 '-pix_fmt', 'yuv420p',       # تنسيق بكسل متوافق
-                '-metadata', 'title=Enhanced Bot Video',
+                '-g', '30',                  # مجموعة صور كل 30 إطار
+                '-keyint_min', '15',         # الحد الأدنى لمجموعة الصور
+                '-sc_threshold', '0',        # تعطيل تبديل المشهد
+                '-tune', 'film',             # تحسين للفيديوهات
                 output_path
             ]
             
-            logger.info(f"🎬 بدء ضغط الفيديو مع الحفاظ على الدقة...")
+            logger.info(f"🎬 بدء ضغط الفيديو باستخدام FFmpeg: معدل البت {target_bitrate/1000:.0f} kbps")
             
             # تنفيذ الضغط
-            result = subprocess.run(cmd, capture_output=True, text=True)
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)  # timeout 5 دقائق
             
             if result.returncode == 0:
                 # التحقق من النتيجة
                 final_info = self.get_video_info(output_path)
                 if final_info:
                     final_size = final_info.get('size_mb', 0)
-                    final_width = final_info.get('width', 0)
-                    final_height = final_info.get('height', 0)
-                    final_fps = final_info.get('fps', 0)
+                    compression_ratio = (original_size - final_size) / original_size * 100
                     
-                    # التحقق من الحفاظ على الدقة
-                    if final_width == original_width and final_height == original_height:
-                        compression_ratio = (original_size - final_size) / original_size * 100
-                        
-                        logger.info(f"✅ تم ضغط الفيديو بنجاح مع الحفاظ على الدقة:")
-                        logger.info(f"   📏 الدقة: {final_width}x{final_height} (محفوظة)")
-                        logger.info(f"   🎬 معدل الإطارات: {final_fps} FPS")
-                        logger.info(f"   📦 الحجم: {original_size:.2f} MB → {final_size:.2f} MB")
-                        logger.info(f"   💾 التوفير: {compression_ratio:.1f}%")
-                        
-                        return True
-                    else:
-                        logger.warning(f"⚠️ تغيرت الدقة: {original_width}x{original_height} → {final_width}x{final_height}")
-                        return False
+                    logger.info(f"✅ تم ضغط الفيديو بنجاح: "
+                               f"{original_size:.2f} MB → {final_size:.2f} MB "
+                               f"(توفير {compression_ratio:.1f}%)")
+                    
+                    # التحقق من أن الحجم النهائي مقبول
+                    if target_size_mb and final_size > target_size_mb * 1.2:  # سماح بزيادة 20%
+                        logger.warning(f"⚠️ الحجم النهائي أكبر من المستهدف: {final_size:.2f} MB > {target_size_mb:.2f} MB")
+                        # محاولة ضغط إضافي
+                        return self._compress_video_aggressive(input_path, output_path, target_size_mb)
+                    
+                    return True
                 else:
                     logger.warning("تم إنشاء الفيديو ولكن فشل في التحقق من النتيجة")
                     return True
             else:
                 logger.error(f"فشل في ضغط الفيديو: {result.stderr}")
+                # محاولة استخدام إعدادات أبسط
+                return self._compress_video_simple(input_path, output_path, target_size_mb)
+                
+        except subprocess.TimeoutExpired:
+            logger.error("انتهت مهلة ضغط الفيديو (5 دقائق)")
+            return False
+        except Exception as e:
+            logger.error(f"خطأ في ضغط الفيديو: {e}")
+            return False
+    
+    def _compress_video_aggressive(self, input_path: str, output_path: str, target_size_mb: float) -> bool:
+        """ضغط فيديو عدواني للحصول على حجم أصغر"""
+        try:
+            logger.info("🔥 محاولة ضغط عدواني للفيديو...")
+            
+            # إعدادات FFmpeg عدوانية
+            cmd = [
+                'ffmpeg', '-y',
+                '-i', input_path,
+                # إعدادات فيديو عدوانية
+                '-c:v', 'libx264',
+                '-preset', 'veryslow',       # أبطء للحصول على ضغط أفضل
+                '-crf', '28',                # جودة أقل للحصول على حجم أصغر
+                '-maxrate', f'{int(target_size_mb * 8 * 1024 * 1024 / 60)}',  # معدل بت منخفض
+                '-bufsize', f'{int(target_size_mb * 8 * 1024 * 1024 / 30)}',
+                '-profile:v', 'baseline',    # ملف H.264 أساسي (أصغر)
+                '-level', '3.1',             # مستوى منخفض
+                # إعدادات صوت عدوانية
+                '-c:a', 'aac',
+                '-b:a', '64k',               # معدل بت صوت منخفض جداً
+                '-ar', '22050',              # معدل عينات منخفض
+                # إعدادات إضافية
+                '-movflags', '+faststart',
+                '-pix_fmt', 'yuv420p',
+                '-g', '15',                  # مجموعة صور أصغر
+                output_path
+            ]
+            
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)  # timeout 10 دقائق
+            
+            if result.returncode == 0:
+                final_info = self.get_video_info(output_path)
+                if final_info:
+                    final_size = final_info.get('size_mb', 0)
+                    logger.info(f"✅ تم الضغط العدواني: {final_size:.2f} MB")
+                    return final_size <= target_size_mb * 1.1  # سماح بزيادة 10%
+            
+            return False
+            
+        except Exception as e:
+            logger.error(f"خطأ في الضغط العدواني: {e}")
+            return False
+    
+    def _compress_video_simple(self, input_path: str, output_path: str, target_size_mb: float = None) -> bool:
+        """ضغط فيديو بسيط كبديل"""
+        try:
+            logger.info("🔄 محاولة ضغط بسيط للفيديو...")
+            
+            # إعدادات FFmpeg بسيطة
+            cmd = [
+                'ffmpeg', '-y',
+                '-i', input_path,
+                '-c:v', 'libx264',
+                '-preset', 'ultrafast',      # أسرع للحصول على نتيجة سريعة
+                '-crf', '30',                # جودة متوسطة
+                '-c:a', 'aac',
+                '-b:a', '128k',
+                output_path
+            ]
+            
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+            
+            if result.returncode == 0:
+                logger.info("✅ تم الضغط البسيط بنجاح")
+                return True
+            
+            return False
+            
+        except Exception as e:
+            logger.error(f"خطأ في الضغط البسيط: {e}")
+            return False
+    
+    def optimize_video_compression(self, input_path: str, output_path: str, target_size_mb: float = None) -> bool:
+        """تحسين ضغط الفيديو مع الحفاظ على الجودة - محسن"""
+        try:
+            # الحصول على معلومات الفيديو الأصلي
+            video_info = self.get_video_info(input_path)
+            if not video_info:
+                logger.warning("فشل في الحصول على معلومات الفيديو، استخدام إعدادات افتراضية")
+                return False
+            
+            original_size = video_info.get('size_mb', 0)
+            original_bitrate = video_info.get('bitrate', 0)
+            
+            logger.info(f"📹 معلومات الفيديو الأصلي: {video_info['width']}x{video_info['height']}, "
+                       f"{video_info['fps']:.2f} FPS, {original_size:.2f} MB")
+            
+            # حساب معدل البت الأمثل
+            if target_size_mb and original_size > target_size_mb:
+                # حساب معدل البت المطلوب للوصول للحجم المطلوب
+                target_bitrate = int((target_size_mb * 8 * 1024 * 1024) / video_info['duration'])
+                target_bitrate = max(target_bitrate, 500000)  # حد أدنى 500 kbps
+            else:
+                # استخدام معدل البت الأصلي مع تحسين كبير
+                target_bitrate = int(original_bitrate * 0.7)  # تقليل 30% للحصول على حجم أصغر
+            
+            # استخدام FFmpeg إذا كان متوفراً
+            if self.ffmpeg_available:
+                try:
+                    # إعدادات FFmpeg محسنة
+                    cmd = [
+                        'ffmpeg', '-i', input_path,
+                        '-c:v', 'libx264',  # كودك H.264
+                        '-preset', 'medium',  # توازن بين السرعة والجودة
+                        '-crf', '25',  # جودة ثابتة محسنة (25 بدلاً من 23)
+                        '-maxrate', f'{target_bitrate}',
+                        '-bufsize', f'{target_bitrate * 2}',
+                        '-c:a', 'aac',  # كودك الصوت
+                        '-b:a', '96k',  # معدل بت صوت أقل
+                        '-movflags', '+faststart',  # تحسين التشغيل
+                        '-pix_fmt', 'yuv420p',  # تنسيق بكسل متوافق
+                        '-y',  # استبدال الملف الموجود
+                        output_path
+                    ]
+                    
+                    logger.info(f"🎬 بدء تحسين الفيديو باستخدام FFmpeg: معدل البت المستهدف {target_bitrate/1000:.0f} kbps")
+                    
+                    # تنفيذ الضغط
+                    result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+                    
+                    if result.returncode == 0:
+                        # التحقق من النتيجة
+                        final_info = self.get_video_info(output_path)
+                        if final_info:
+                            final_size = final_info.get('size_mb', 0)
+                            compression_ratio = (original_size - final_size) / original_size * 100
+                            
+                            logger.info(f"✅ تم تحسين الفيديو بنجاح باستخدام FFmpeg: "
+                                       f"{original_size:.2f} MB → {final_size:.2f} MB "
+                                       f"(توفير {compression_ratio:.1f}%)")
+                            return True
+                        else:
+                            logger.warning("تم إنشاء الفيديو ولكن فشل في التحقق من النتيجة")
+                            return True
+                    else:
+                        logger.warning(f"فشل في استخدام FFmpeg: {result.stderr}")
+                        # الانتقال إلى الطريقة البديلة
+                        raise Exception("FFmpeg فشل في التنفيذ")
+                        
+                except Exception as ffmpeg_error:
+                    logger.warning(f"فشل في استخدام FFmpeg: {ffmpeg_error}")
+                    # الانتقال إلى الطريقة البديلة
+            
+            # استخدام OpenCV كبديل لضغط بسيط
+            try:
+                logger.info("🔄 استخدام OpenCV كبديل لضغط الفيديو...")
+                
+                # محاولة استخدام OpenCV لمعالجة الفيديو
+                if self.optimize_video_with_opencv(input_path, output_path, target_size_mb):
+                    logger.info("✅ تم معالجة الفيديو بنجاح باستخدام OpenCV")
+                    return True
+                else:
+                    # إذا فشل OpenCV، استخدم النسخ البسيط
+                    logger.warning("فشل في معالجة الفيديو باستخدام OpenCV، استخدام النسخ البسيط")
+                    import shutil
+                    shutil.copy2(input_path, output_path)
+                    
+                    logger.info(f"✅ تم نسخ الفيديو إلى {output_path} (بدون ضغط إضافي)")
+                    if not self.ffmpeg_available:
+                        logger.info("💡 للحصول على ضغط أفضل، قم بتثبيت FFmpeg")
+                    else:
+                        logger.info("💡 FFmpeg متوفر ولكن فشل في التنفيذ، تم استخدام النسخ البسيط")
+                    
+                    return True
+                
+            except Exception as opencv_error:
+                logger.error(f"فشل في استخدام OpenCV كبديل: {opencv_error}")
                 return False
                 
         except Exception as e:
-            logger.error(f"خطأ في ضغط الفيديو: {e}")
+            logger.error(f"خطأ في تحسين ضغط الفيديو: {e}")
             return False
