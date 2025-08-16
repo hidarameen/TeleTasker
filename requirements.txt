@@ -18,6 +18,7 @@ Pillow==10.4.0
 
 # Audio Processing
 mutagen>=1.47.0
+Pillow>=10.4.0
 
 # Video Processing & Optimization
 # ملاحظة: ffmpeg-python هي مكتبة Python للتفاعل مع FFmpeg
