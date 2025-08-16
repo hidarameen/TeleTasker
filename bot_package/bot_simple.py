@@ -1871,6 +1871,17 @@ class SimpleTelegramBot:
                     except ValueError as e:
                         logger.error(f"❌ خطأ في إضافة اللغة السريعة: {e}")
                         await event.answer("❌ خطأ في تحليل البيانات")
+            elif data.startswith("quick_remove_lang_"): # Handler for quick language removal
+                parts = data.split("_")
+                if len(parts) >= 5:
+                    try:
+                        task_id = int(parts[3])
+                        language_code = parts[4]
+                        language_name = "_".join(parts[5:]) if len(parts) > 5 else parts[4]
+                        await self.quick_remove_language(event, task_id, language_code, language_name)
+                    except ValueError as e:
+                        logger.error(f"خطأ في حذف اللغة السريعة: {e}")
+                        await event.answer("❌ خطأ في تحليل البيانات")
             elif data.startswith("toggle_lang_selection_"): # Handler for toggling language selection
                 parts = data.split("_")
                 if len(parts) >= 5:
@@ -2660,6 +2671,10 @@ class SimpleTelegramBot:
                 return
             elif state == 'add_language': # Handle adding language filter
                 task_id = data.get('task_id')
+                await self.handle_add_language_filter(event, task_id, message_text)
+                return
+            elif state == 'waiting_language_filter': # Handle adding language filter
+                task_id = int(data)
                 await self.handle_add_language_filter(event, task_id, message_text)
                 return
             elif state == 'waiting_hyperlink_settings': # Handle editing hyperlink settings
@@ -3685,6 +3700,34 @@ class SimpleTelegramBot:
         except Exception as e:
             logger.error(f"خطأ في الإضافة السريعة للغة: {e}")
             await event.answer("❌ حدث خطأ أثناء إضافة اللغة")
+
+    async def quick_remove_language(self, event, task_id, language_code, language_name):
+        """Quick remove language from predefined list"""
+        user_id = event.sender_id
+        task = self.db.get_task(task_id, user_id)
+        
+        if not task:
+            await event.answer("❌ المهمة غير موجودة")
+            return
+        
+        try:
+            # Remove language filter
+            success = self.db.remove_language_filter(task_id, language_code)
+            
+            if success:
+                await event.answer(f"✅ تم حذف {language_name} ({language_code})")
+                
+                # Force refresh UserBot tasks
+                await self._refresh_userbot_tasks(user_id)
+                
+                # Refresh the quick add languages display
+                await self.show_quick_add_languages(event, task_id)
+            else:
+                await event.answer(f"❌ فشل في حذف {language_name}")
+                
+        except Exception as e:
+            logger.error(f"خطأ في حذف اللغة السريعة: {e}")
+            await event.answer("❌ حدث خطأ أثناء حذف اللغة")
 
     async def toggle_language_selection(self, event, task_id, language_code):
         """Toggle language selection status"""
@@ -9906,37 +9949,65 @@ class SimpleTelegramBot:
         task = self.db.get_task(task_id, user_id)
         
         if not task:
-            await event.respond("❌ المهمة غير موجودة")
+            await self.edit_or_send_message(event, "❌ المهمة غير موجودة")
             return
             
-        message_text = event.message.text.strip()
+        message_text = event.text.strip()
         
         try:
-            # Parse language codes (e.g., "ar,en,fr")
-            language_codes = [lang.strip().lower() for lang in message_text.split(',')]
-            
-            # Validate language codes
-            valid_codes = {'ar', 'en', 'fr', 'de', 'es', 'ru', 'ja', 'zh', 'ko', 'hi', 'it', 'pt'}
-            invalid_codes = [code for code in language_codes if code not in valid_codes]
-            
-            if invalid_codes:
-                await event.respond(f"❌ رموز لغات غير صحيحة: {', '.join(invalid_codes)}\n"
-                                  f"الرموز المدعومة: {', '.join(sorted(valid_codes))}")
+            # Parse language input (e.g., "en English" or "ar العربية")
+            parts = message_text.split(' ', 1)
+            if len(parts) != 2:
+                await self.edit_or_send_message(event, 
+                    "❌ تنسيق غير صحيح\n\n"
+                    "📝 استخدم التنسيق: `[كود اللغة] [اسم اللغة]`\n"
+                    "مثال: `en English` أو `ar العربية`"
+                )
                 return
-                
-            success = self.db.add_language_filters(task_id, language_codes)
+            
+            language_code = parts[0].strip().lower()
+            language_name = parts[1].strip()
+            
+            # Validate language code (2-3 characters)
+            if not (2 <= len(language_code) <= 3):
+                await self.edit_or_send_message(event, 
+                    "❌ كود اللغة غير صحيح\n\n"
+                    "📝 كود اللغة يجب أن يكون من 2-3 أحرف\n"
+                    "مثال: `en`, `ar`, `fr`"
+                )
+                return
+            
+            # Add language filter
+            success = self.db.add_language_filter(task_id, language_code, language_name, True)
             
             if success:
-                await event.respond(f"✅ تم إضافة فلاتر اللغات: {', '.join(language_codes)}")
+                # Clear conversation state
+                self.db.clear_conversation_state(user_id)
+                
+                # Force refresh UserBot tasks
+                await self._refresh_userbot_tasks(user_id)
+                
+                # Show success message
+                await self.edit_or_send_message(event, 
+                    f"✅ تم إضافة اللغة بنجاح!\n\n"
+                    f"🌍 اللغة: {language_name}\n"
+                    f"🔤 الكود: {language_code.upper()}\n"
+                    f"📊 الحالة: 🟢 مفعلة"
+                )
+                
+                # Refresh language management after brief delay
+                import asyncio
+                await asyncio.sleep(1.5)
+                await self.show_language_management(event, task_id)
             else:
-                await event.respond("❌ فشل في إضافة فلاتر اللغات")
+                await self.edit_or_send_message(event, "❌ فشل في إضافة اللغة")
                 
         except Exception as e:
-            logger.error(f"خطأ في إضافة فلاتر اللغات: {e}")
-            await event.respond("❌ حدث خطأ أثناء الإضافة")
-        
-        # Clear user state
-        self.clear_user_state(user_id)
+            logger.error(f"خطأ في إضافة فلتر اللغة: {e}")
+            await self.edit_or_send_message(event, "❌ حدث خطأ أثناء الإضافة")
+            
+        # Clear conversation state
+        self.db.clear_conversation_state(user_id)
 
     async def toggle_language_mode(self, event, task_id):
         """Toggle language filter mode between allow and block"""
