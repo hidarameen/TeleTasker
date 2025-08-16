@@ -2550,7 +2550,7 @@ class SimpleTelegramBot:
             state_data = (state, data)
 
             # Handle authentication states
-            if state in ['waiting_phone', 'waiting_code', 'waiting_password']:
+            if state in ['waiting_phone', 'waiting_code', 'waiting_password', 'waiting_session']:
                 await self.handle_auth_message(event, state_data)
                 return
 
