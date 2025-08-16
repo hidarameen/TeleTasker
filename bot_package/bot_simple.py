@@ -10277,6 +10277,29 @@ class SimpleTelegramBot:
 
 
 
+    def _get_bot_token(self):
+        """Get BOT_TOKEN from various sources"""
+        try:
+            # Try to import from config.py
+            from config import BOT_TOKEN
+            return BOT_TOKEN
+        except ImportError:
+            # Try to get from environment
+            import os
+            BOT_TOKEN = os.getenv('BOT_TOKEN')
+            if BOT_TOKEN:
+                return BOT_TOKEN
+            
+            # Try to get from userbot instance
+            try:
+                from userbot_service.userbot import userbot_instance
+                if hasattr(userbot_instance, 'bot_token'):
+                    return userbot_instance.bot_token
+            except:
+                pass
+            
+            return None
+
     async def show_source_admins(self, event, task_id, source_chat_id):
         """Show admins for a specific source chat"""
         user_id = event.sender_id
@@ -10498,7 +10521,15 @@ class SimpleTelegramBot:
             self.db.clear_admin_filters_for_source(task_id, source_chat_id)
             
             # Use Bot API to get admins instead of UserBot
-            from config import BOT_TOKEN
+            BOT_TOKEN = self._get_bot_token()
+            if not BOT_TOKEN:
+                await event.edit(
+                    f"❌ لا يمكن العثور على BOT_TOKEN\n\n"
+                    f"💡 تأكد من إعداد BOT_TOKEN في ملف config.py أو متغير البيئة",
+                    buttons=[[Button.inline("🔙 رجوع", f"source_admins_{task_id}_{source_chat_id}")]]
+                )
+                return
+            
             admins_data = userbot_instance.get_channel_admins_via_bot(BOT_TOKEN, int(source_chat_id))
             
             if admins_data:
@@ -10593,7 +10624,11 @@ class SimpleTelegramBot:
                     self.db.clear_admin_filters_for_source(task_id, source_chat_id)
                     
                     # Use Bot API to get admins instead of UserBot
-                    from config import BOT_TOKEN
+                    BOT_TOKEN = self._get_bot_token()
+                    if not BOT_TOKEN:
+                        logger.error(f"لا يمكن العثور على BOT_TOKEN للمصدر {source_chat_id}")
+                        continue
+                    
                     admins_data = userbot_instance.get_channel_admins_via_bot(BOT_TOKEN, int(source_chat_id))
                     
                     if admins_data:
