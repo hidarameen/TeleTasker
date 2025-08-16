@@ -27,6 +27,7 @@ from bot_package.config import API_ID, API_HASH
 import time
 from collections import defaultdict
 from watermark_processor import WatermarkProcessor
+from audio_processor import AudioProcessor
 import tempfile
 import os
 
@@ -93,6 +94,7 @@ class UserbotService:
         self.running = True
         self.album_collectors: Dict[int, AlbumCollector] = {}  # user_id -> collector
         self.watermark_processor = WatermarkProcessor()  # معالج العلامة المائية
+        self.audio_processor = AudioProcessor()  # معالج الوسوم الصوتية
         self.session_health_status: Dict[int, bool] = {}  # user_id -> health status
         self.session_locks: Dict[int, bool] = {}  # user_id -> is_locked (prevent multiple usage)
         self.max_reconnect_attempts = 3
@@ -1957,19 +1959,94 @@ class UserbotService:
                 task_id
             )
             
+            # ===== تطبيق الوسوم الصوتية بعد العلامة المائية =====
+            # معالجة الوسوم الصوتية للملفات الصوتية
             if watermarked_media and watermarked_media != media_bytes:
-                logger.info(f"✅ تم تطبيق العلامة المائية على الوسائط للمهمة {task_id}")
-                logger.info(f"📁 اسم الملف المُرجع: {full_file_name}")
-                return watermarked_media, full_file_name
+                # Use watermarked media for audio processing
+                final_media, final_filename = await self.apply_audio_metadata(event, task_id, watermarked_media, full_file_name)
+                logger.info(f"✅ تم تطبيق العلامة المائية والوسوم الصوتية على الوسائط للمهمة {task_id}")
+                logger.info(f"📁 اسم الملف المُرجع: {final_filename}")
+                return final_media, final_filename
             else:
+                # Use original media for audio processing
+                final_media, final_filename = await self.apply_audio_metadata(event, task_id, media_bytes, full_file_name)
                 logger.debug(f"🔄 لم يتم تطبيق العلامة المائية على الوسائط للمهمة {task_id}")
-                logger.info(f"📁 اسم الملف المُرجع (بدون علامة مائية): {full_file_name}")
-                # Even if watermark wasn't applied, return the improved filename
-                return event.message.media, full_file_name
+                logger.info(f"📁 اسم الملف المُرجع (مع الوسوم الصوتية): {final_filename}")
+                return final_media, final_filename
                 
         except Exception as e:
             logger.error(f"خطأ في تطبيق العلامة المائية: {e}")
             return event.message.media, None
+    
+    async def apply_audio_metadata(self, event, task_id: int, media_bytes: bytes, file_name: str):
+        """
+        Apply audio metadata processing if enabled for the task
+        
+        الميزات:
+        - تعديل جميع أنواع الوسوم الصوتية (ID3v2)
+        - قوالب جاهزة للاستخدام
+        - صورة غلاف مخصصة
+        - دمج مقاطع صوتية إضافية
+        - الحفاظ على الجودة 100%
+        """
+        try:
+            # Get audio metadata settings (implement this in database)
+            # For now, we'll use default settings
+            audio_settings = {
+                'enabled': False,
+                'template': 'default',
+                'album_art_enabled': False,
+                'audio_merge_enabled': False
+            }
+            
+            if not audio_settings.get('enabled', False):
+                logger.info(f"🎵 الوسوم الصوتية معطلة للمهمة {task_id}")
+                return media_bytes, file_name
+            
+            # Check if this is an audio file
+            is_audio = False
+            if hasattr(event.message.media, 'document') and event.message.media.document:
+                doc = event.message.media.document
+                if doc.mime_type and doc.mime_type.startswith('audio/'):
+                    is_audio = True
+                elif file_name.lower().endswith(('.mp3', '.m4a', '.aac', '.ogg', '.wav', '.flac', '.wma', '.opus')):
+                    is_audio = True
+            
+            if not is_audio:
+                logger.debug(f"🎵 تخطي الملف - ليس ملف صوتي للمهمة {task_id}")
+                return media_bytes, file_name
+            
+            logger.info(f"🎵 بدء معالجة الوسوم الصوتية للملف {file_name} في المهمة {task_id}")
+            
+            # Get template from settings
+            template_name = audio_settings.get('template', 'default')
+            from audio_metadata_settings import get_template_by_name
+            template_data = get_template_by_name(template_name)
+            metadata_template = template_data['template']
+            
+            # Process audio metadata
+            processed_audio = self.audio_processor.process_audio_once_for_all_targets(
+                media_bytes,
+                file_name,
+                metadata_template,
+                task_id=task_id
+            )
+            
+            if processed_audio and processed_audio != media_bytes:
+                logger.info(f"✅ تم معالجة الوسوم الصوتية للملف {file_name} في المهمة {task_id}")
+                # Update filename to MP3 if conversion was done
+                if file_name.lower().endswith(('.m4a', '.aac', '.ogg', '.wav', '.flac', '.wma', '.opus')):
+                    new_file_name = file_name.rsplit('.', 1)[0] + '.mp3'
+                    logger.info(f"🔄 تم تحديث اسم الملف من {file_name} إلى {new_file_name}")
+                    return processed_audio, new_file_name
+                return processed_audio, file_name
+            else:
+                logger.debug(f"🔄 لم يتم معالجة الوسوم الصوتية للملف {file_name} في المهمة {task_id}")
+                return media_bytes, file_name
+                
+        except Exception as e:
+            logger.error(f"خطأ في معالجة الوسوم الصوتية: {e}")
+            return media_bytes, file_name
 
     def apply_message_formatting(self, text: str, settings: dict) -> str:
         """Apply header and footer formatting to message text"""
