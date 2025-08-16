@@ -333,14 +333,13 @@ class SimpleTelegramBot:
                         logger.error(f"❌ خطأ في تحليل معرف المهمة للفلاتر المتقدمة: {e}, data='{data}', parts={parts}")
                         await event.answer("❌ خطأ في تحليل البيانات")
             elif data.startswith("advanced_features_"): # Handler for advanced features
-                parts = data.split("_")
-                if len(parts) >= 3:
-                    try:
-                        task_id = int(parts[2])
-                        await self.show_advanced_features(event, task_id)
-                    except ValueError as e:
-                        logger.error(f"❌ خطأ في تحليل معرف المهمة للميزات المتقدمة: {e}, data='{data}', parts={parts}")
-                        await event.answer("❌ خطأ في تحليل البيانات")
+                try:
+                    # Extract task_id from data like "advanced_features_123"
+                    task_id = int(data.replace("advanced_features_", ""))
+                    await self.show_advanced_features(event, task_id)
+                except ValueError as e:
+                    logger.error(f"❌ خطأ في تحليل معرف المهمة للميزات المتقدمة: {e}, data='{data}'")
+                    await event.answer("❌ خطأ في تحليل البيانات")
             elif data.startswith("character_limit_"): # Handler for character limit settings
                 parts = data.split("_")
                 if len(parts) >= 3:
@@ -432,205 +431,215 @@ class SimpleTelegramBot:
                         logger.error(f"❌ خطأ في تحليل معرف المهمة لتبديل تأخير التوجيه: {e}")
                         await event.answer("❌ خطأ في تحليل البيانات")
             elif data.startswith("watermark_settings_"): # Handler for watermark settings
-                parts = data.split("_")
-                if len(parts) >= 3:
-                    try:
-                        task_id = int(parts[2])
-                        await self.show_watermark_settings(event, task_id)
-                    except ValueError as e:
-                        logger.error(f"❌ خطأ في تحليل معرف المهمة لإعدادات العلامة المائية: {e}, data='{data}', parts={parts}")
-                        await event.answer("❌ خطأ في تحليل البيانات")
+                try:
+                    # Extract task_id from data like "watermark_settings_123"
+                    task_id = int(data.replace("watermark_settings_", ""))
+                    await self.show_watermark_settings(event, task_id)
+                except ValueError as e:
+                    logger.error(f"❌ خطأ في تحليل معرف المهمة لإعدادات العلامة المائية: {e}, data='{data}'")
+                    await event.answer("❌ خطأ في تحليل البيانات")
             elif data.startswith("toggle_watermark_"): # Toggle watermark
-                parts = data.split("_")
-                if len(parts) >= 3:
-                    try:
-                        task_id = int(parts[2])
-                        await self.toggle_watermark(event, task_id)
-                    except ValueError as e:
-                        logger.error(f"❌ خطأ في تحليل معرف المهمة لتبديل العلامة المائية: {e}")
-                        await event.answer("❌ خطأ في تحليل البيانات")
+                try:
+                    # Extract task_id from data like "toggle_watermark_123"
+                    task_id = int(data.replace("toggle_watermark_", ""))
+                    await self.toggle_watermark(event, task_id)
+                except ValueError as e:
+                    logger.error(f"❌ خطأ في تحليل معرف المهمة لتبديل العلامة المائية: {e}, data='{data}'")
+                    await event.answer("❌ خطأ في تحليل البيانات")
             elif data.startswith("watermark_appearance_"): # Watermark appearance settings
-                parts = data.split("_")
-                if len(parts) >= 3:
-                    try:
-                        task_id = int(parts[2])
-                        await self.show_watermark_appearance(event, task_id)
-                    except ValueError as e:
-                        logger.error(f"❌ خطأ في تحليل معرف المهمة لإعدادات مظهر العلامة المائية: {e}")
-                        await event.answer("❌ خطأ في تحليل البيانات")
+                try:
+                    # Extract task_id from data like "watermark_appearance_123"
+                    task_id = int(data.replace("watermark_appearance_", ""))
+                    await self.show_watermark_appearance(event, task_id)
+                except ValueError as e:
+                    logger.error(f"❌ خطأ في تحليل معرف المهمة لإعدادات مظهر العلامة المائية: {e}, data='{data}'")
+                    await event.answer("❌ خطأ في تحليل البيانات")
             elif data.startswith("watermark_type_"): # Watermark type settings
-                parts = data.split("_")
-                if len(parts) >= 3:
-                    try:
-                        task_id = int(parts[2])
-                        await self.show_watermark_type(event, task_id)
-                    except ValueError as e:
-                        logger.error(f"❌ خطأ في تحليل معرف المهمة لإعدادات نوع العلامة المائية: {e}")
-                        await event.answer("❌ خطأ في تحليل البيانات")
+                try:
+                    # Extract task_id from data like "watermark_type_123"
+                    task_id = int(data.replace("watermark_type_", ""))
+                    await self.show_watermark_type(event, task_id)
+                except ValueError as e:
+                    logger.error(f"❌ خطأ في تحليل معرف المهمة لإعدادات نوع العلامة المائية: {e}, data='{data}'")
+                    await event.answer("❌ خطأ في تحليل البيانات")
             elif data.startswith("watermark_media_"): # Watermark media types
-                parts = data.split("_")
-                if len(parts) >= 3:
-                    try:
-                        task_id = int(parts[2])
-                        await self.show_watermark_media_types(event, task_id)
-                    except ValueError as e:
-                        logger.error(f"❌ خطأ في تحليل معرف المهمة لأنواع الوسائط للعلامة المائية: {e}")
-                        await event.answer("❌ خطأ في تحليل البيانات")
+                try:
+                    # Extract task_id from data like "watermark_media_123"
+                    task_id = int(data.replace("watermark_media_", ""))
+                    await self.show_watermark_media_types(event, task_id)
+                except ValueError as e:
+                    logger.error(f"❌ خطأ في تحليل معرف المهمة لأنواع الوسائط للعلامة المائية: {e}, data='{data}'")
+                    await event.answer("❌ خطأ في تحليل البيانات")
             elif data.startswith("watermark_size_up_"): # Increase watermark size
-                parts = data.split("_")
-                if len(parts) >= 4:
-                    try:
-                        task_id = int(parts[3])
-                        await self.adjust_watermark_size(event, task_id, increase=True)
-                    except ValueError as e:
-                        logger.error(f"❌ خطأ في تحليل معرف المهمة لزيادة حجم العلامة المائية: {e}")
-                        await event.answer("❌ خطأ في تحليل البيانات")
+                try:
+                    # Extract task_id from data like "watermark_size_up_123"
+                    task_id = int(data.replace("watermark_size_up_", ""))
+                    await self.adjust_watermark_size(event, task_id, increase=True)
+                except ValueError as e:
+                    logger.error(f"❌ خطأ في تحليل معرف المهمة لزيادة حجم العلامة المائية: {e}, data='{data}'")
+                    await event.answer("❌ خطأ في تحليل البيانات")
             elif data.startswith("watermark_size_down_"): # Decrease watermark size
-                parts = data.split("_")
-                if len(parts) >= 4:
-                    try:
-                        task_id = int(parts[3])
-                        await self.adjust_watermark_size(event, task_id, increase=False)
-                    except ValueError as e:
-                        logger.error(f"❌ خطأ في تحليل معرف المهمة لتقليل حجم العلامة المائية: {e}")
-                        await event.answer("❌ خطأ في تحليل البيانات")
+                try:
+                    # Extract task_id from data like "watermark_size_down_123"
+                    task_id = int(data.replace("watermark_size_down_", ""))
+                    await self.adjust_watermark_size(event, task_id, increase=False)
+                except ValueError as e:
+                    logger.error(f"❌ خطأ في تحليل معرف المهمة لتقليل حجم العلامة المائية: {e}, data='{data}'")
+                    await event.answer("❌ خطأ في تحليل البيانات")
             elif data.startswith("watermark_opacity_up_"): # Increase watermark opacity
-                parts = data.split("_")
-                if len(parts) >= 4:
-                    try:
-                        task_id = int(parts[3])
-                        await self.adjust_watermark_opacity(event, task_id, increase=True)
-                    except ValueError as e:
-                        logger.error(f"❌ خطأ في تحليل معرف المهمة لزيادة شفافية العلامة المائية: {e}")
-                        await event.answer("❌ خطأ في تحليل البيانات")
+                try:
+                    # Extract task_id from data like "watermark_opacity_up_123"
+                    task_id = int(data.replace("watermark_opacity_up_", ""))
+                    await self.adjust_watermark_opacity(event, task_id, increase=True)
+                except ValueError as e:
+                    logger.error(f"❌ خطأ في تحليل معرف المهمة لزيادة شفافية العلامة المائية: {e}, data='{data}'")
+                    await event.answer("❌ خطأ في تحليل البيانات")
             elif data.startswith("watermark_opacity_down_"): # Decrease watermark opacity
-                parts = data.split("_")
-                if len(parts) >= 4:
-                    try:
-                        task_id = int(parts[3])
-                        await self.adjust_watermark_opacity(event, task_id, increase=False)
-                    except ValueError as e:
-                        logger.error(f"❌ خطأ في تحليل معرف المهمة لتقليل شفافية العلامة المائية: {e}")
-                        await event.answer("❌ خطأ في تحليل البيانات")
+                try:
+                    # Extract task_id from data like "watermark_opacity_down_123"
+                    task_id = int(data.replace("watermark_opacity_down_", ""))
+                    await self.adjust_watermark_opacity(event, task_id, increase=False)
+                except ValueError as e:
+                    logger.error(f"❌ خطأ في تحليل معرف المهمة لتقليل شفافية العلامة المائية: {e}, data='{data}'")
+                    await event.answer("❌ خطأ في تحليل البيانات")
             elif data.startswith("watermark_font_up_"): # Increase watermark font size
-                parts = data.split("_")
-                if len(parts) >= 4:
-                    try:
-                        task_id = int(parts[3])
-                        await self.adjust_watermark_font_size(event, task_id, increase=True)
-                    except ValueError as e:
-                        logger.error(f"❌ خطأ في تحليل معرف المهمة لزيادة حجم خط العلامة المائية: {e}")
-                        await event.answer("❌ خطأ في تحليل البيانات")
+                try:
+                    # Extract task_id from data like "watermark_font_up_123"
+                    task_id = int(data.replace("watermark_font_up_", ""))
+                    await self.adjust_watermark_font_size(event, task_id, increase=True)
+                except ValueError as e:
+                    logger.error(f"❌ خطأ في تحليل معرف المهمة لزيادة حجم خط العلامة المائية: {e}, data='{data}'")
+                    await event.answer("❌ خطأ في تحليل البيانات")
             elif data.startswith("watermark_font_down_"): # Decrease watermark font size
-                parts = data.split("_")
-                if len(parts) >= 4:
-                    try:
-                        task_id = int(parts[3])
-                        await self.adjust_watermark_font_size(event, task_id, increase=False)
-                    except ValueError as e:
-                        logger.error(f"❌ خطأ في تحليل معرف المهمة لتقليل حجم خط العلامة المائية: {e}")
-                        await event.answer("❌ خطأ في تحليل البيانات")
+                try:
+                    # Extract task_id from data like "watermark_font_down_123"
+                    task_id = int(data.replace("watermark_font_down_", ""))
+                    await self.adjust_watermark_font_size(event, task_id, increase=False)
+                except ValueError as e:
+                    logger.error(f"❌ خطأ في تحليل معرف المهمة لتقليل حجم خط العلامة المائية: {e}, data='{data}'")
+                    await event.answer("❌ خطأ في تحليل البيانات")
             elif data.startswith("watermark_default_up_"): # Increase default watermark size
-                parts = data.split("_")
-                if len(parts) >= 4:
-                    try:
-                        task_id = int(parts[3])
-                        await self.adjust_watermark_default_size(event, task_id, increase=True)
-                    except ValueError as e:
-                        logger.error(f"❌ خطأ في تحليل معرف المهمة لزيادة الحجم الافتراضي: {e}")
-                        await event.answer("❌ خطأ في تحليل البيانات")
+                try:
+                    # Extract task_id from data like "watermark_default_up_123"
+                    task_id = int(data.replace("watermark_default_up_", ""))
+                    await self.adjust_watermark_default_size(event, task_id, increase=True)
+                except ValueError as e:
+                    logger.error(f"❌ خطأ في تحليل معرف المهمة لزيادة الحجم الافتراضي: {e}, data='{data}'")
+                    await event.answer("❌ خطأ في تحليل البيانات")
             elif data.startswith("watermark_default_down_"): # Decrease default watermark size
-                parts = data.split("_")
-                if len(parts) >= 4:
-                    try:
-                        task_id = int(parts[3])
-                        await self.adjust_watermark_default_size(event, task_id, increase=False)
-                    except ValueError as e:
-                        logger.error(f"❌ خطأ في تحليل معرف المهمة لتقليل الحجم الافتراضي: {e}")
-                        await event.answer("❌ خطأ في تحليل البيانات")
+                try:
+                    # Extract task_id from data like "watermark_default_down_123"
+                    task_id = int(data.replace("watermark_default_down_", ""))
+                    await self.adjust_watermark_default_size(event, task_id, increase=False)
+                except ValueError as e:
+                    logger.error(f"❌ خطأ في تحليل معرف المهمة لتقليل الحجم الافتراضي: {e}, data='{data}'")
+                    await event.answer("❌ خطأ في تحليل البيانات")
             elif data.startswith("watermark_apply_default_"): # Apply default size
-                parts = data.split("_")
-                if len(parts) >= 4:
-                    try:
-                        task_id = int(parts[3])
-                        await self.apply_default_watermark_size(event, task_id)
-                    except ValueError as e:
-                        logger.error(f"❌ خطأ في تحليل معرف المهمة لتطبيق الحجم الافتراضي: {e}")
-                        await event.answer("❌ خطأ في تحليل البيانات")
+                try:
+                    # Extract task_id from data like "watermark_apply_default_123"
+                    task_id = int(data.replace("watermark_apply_default_", ""))
+                    await self.apply_default_watermark_size(event, task_id)
+                except ValueError as e:
+                    logger.error(f"❌ خطأ في تحليل معرف المهمة لتطبيق الحجم الافتراضي: {e}, data='{data}'")
+                    await event.answer("❌ خطأ في تحليل البيانات")
             elif data.startswith("watermark_offset_left_"): # Move watermark left
-                parts = data.split("_")
-                if len(parts) >= 4:
-                    try:
-                        task_id = int(parts[3])
-                        await self.adjust_watermark_offset(event, task_id, axis='x', increase=False)
-                    except ValueError as e:
-                        logger.error(f"❌ خطأ في تحليل معرف المهمة للإزاحة يساراً: {e}")
-                        await event.answer("❌ خطأ في تحليل البيانات")
+                try:
+                    # Extract task_id from data like "watermark_offset_left_123"
+                    task_id = int(data.replace("watermark_offset_left_", ""))
+                    await self.adjust_watermark_offset(event, task_id, axis='x', increase=False)
+                except ValueError as e:
+                    logger.error(f"❌ خطأ في تحليل معرف المهمة للإزاحة يساراً: {e}, data='{data}'")
+                    await event.answer("❌ خطأ في تحليل البيانات")
             elif data.startswith("watermark_offset_right_"): # Move watermark right
-                parts = data.split("_")
-                if len(parts) >= 4:
-                    try:
-                        task_id = int(parts[3])
-                        await self.adjust_watermark_offset(event, task_id, axis='x', increase=True)
-                    except ValueError as e:
-                        logger.error(f"❌ خطأ في تحليل معرف المهمة للإزاحة يميناً: {e}")
-                        await event.answer("❌ خطأ في تحليل البيانات")
+                try:
+                    # Extract task_id from data like "watermark_offset_right_123"
+                    task_id = int(data.replace("watermark_offset_right_", ""))
+                    await self.adjust_watermark_offset(event, task_id, axis='x', increase=True)
+                except ValueError as e:
+                    logger.error(f"❌ خطأ في تحليل معرف المهمة للإزاحة يميناً: {e}, data='{data}'")
+                    await event.answer("❌ خطأ في تحليل البيانات")
             elif data.startswith("watermark_offset_up_"): # Move watermark up
-                parts = data.split("_")
-                if len(parts) >= 4:
-                    try:
-                        task_id = int(parts[3])
-                        await self.adjust_watermark_offset(event, task_id, axis='y', increase=False)
-                    except ValueError as e:
-                        logger.error(f"❌ خطأ في تحليل معرف المهمة للإزاحة أعلى: {e}")
-                        await event.answer("❌ خطأ في تحليل البيانات")
+                try:
+                    # Extract task_id from data like "watermark_offset_up_123"
+                    task_id = int(data.replace("watermark_offset_up_", ""))
+                    await self.adjust_watermark_offset(event, task_id, axis='y', increase=False)
+                except ValueError as e:
+                    logger.error(f"❌ خطأ في تحليل معرف المهمة للإزاحة أعلى: {e}, data='{data}'")
+                    await event.answer("❌ خطأ في تحليل البيانات")
             elif data.startswith("watermark_offset_down_"): # Move watermark down
-                parts = data.split("_")
-                if len(parts) >= 4:
-                    try:
-                        task_id = int(parts[3])
-                        await self.adjust_watermark_offset(event, task_id, axis='y', increase=True)
-                    except ValueError as e:
-                        logger.error(f"❌ خطأ في تحليل معرف المهمة للإزاحة أسفل: {e}")
-                        await event.answer("❌ خطأ في تحليل البيانات")
+                try:
+                    # Extract task_id from data like "watermark_offset_down_123"
+                    task_id = int(data.replace("watermark_offset_down_", ""))
+                    await self.adjust_watermark_offset(event, task_id, axis='y', increase=True)
+                except ValueError as e:
+                    logger.error(f"❌ خطأ في تحليل معرف المهمة للإزاحة أسفل: {e}, data='{data}'")
+                    await event.answer("❌ خطأ في تحليل البيانات")
             elif data.startswith("watermark_reset_offset_"): # Reset watermark offset
-                parts = data.split("_")
-                if len(parts) >= 4:
-                    try:
-                        task_id = int(parts[3])
-                        await self.reset_watermark_offset(event, task_id)
-                    except ValueError as e:
-                        logger.error(f"❌ خطأ في تحليل معرف المهمة لإعادة تعيين الإزاحة: {e}")
-                        await event.answer("❌ خطأ في تحليل البيانات")
+                try:
+                    # Extract task_id from data like "watermark_reset_offset_123"
+                    task_id = int(data.replace("watermark_reset_offset_", ""))
+                    await self.reset_watermark_offset(event, task_id)
+                except ValueError as e:
+                    logger.error(f"❌ خطأ في تحليل معرف المهمة لإعادة تعيين الإزاحة: {e}, data='{data}'")
+                    await event.answer("❌ خطأ في تحليل البيانات")
             elif data.startswith("watermark_position_selector_"): # Show watermark position selector
-                parts = data.split("_")
-                if len(parts) >= 4:
-                    try:
-                        task_id = int(parts[3])
-                        await self.show_watermark_position_selector(event, task_id)
-                    except ValueError as e:
-                        logger.error(f"❌ خطأ في تحليل معرف المهمة لعرض أختيار موضع العلامة المائية: {e}")
-                        await event.answer("❌ خطأ في تحليل البيانات")
+                try:
+                    # Extract task_id from data like "watermark_position_selector_123"
+                    task_id = int(data.replace("watermark_position_selector_", ""))
+                    await self.show_watermark_position_selector(event, task_id)
+                except ValueError as e:
+                    logger.error(f"❌ خطأ في تحليل معرف المهمة لعرض أختيار موضع العلامة المائية: {e}, data='{data}'")
+                    await event.answer("❌ خطأ في تحليل البيانات")
             elif data.startswith("set_watermark_position_"): # Set watermark position
-                parts = data.split("_")
-                if len(parts) >= 5:
-                    try:
-                        position = parts[3]
-                        task_id = int(parts[4])
-                        await self.set_watermark_position(event, task_id, position)
-                    except ValueError as e:
-                        logger.error(f"❌ خطأ في تحليل معرف المهمة لتعيين موضع العلامة المائية: {e}")
-                        await event.answer("❌ خطأ في تحليل البيانات")
+                try:
+                    # Extract task_id and position from data like "set_watermark_position_top_left_123"
+                    # Remove "set_watermark_position_" prefix
+                    remaining = data.replace("set_watermark_position_", "")
+                    
+                    # Find the last underscore to separate position from task_id
+                    last_underscore = remaining.rfind("_")
+                    if last_underscore != -1:
+                        position = remaining[:last_underscore]
+                        task_id = int(remaining[last_underscore + 1:])
+                        
+                        # Validate position
+                        valid_positions = ['top_left', 'top', 'top_right', 'bottom_left', 'bottom', 'bottom_right', 'center']
+                        if position in valid_positions:
+                            await self.set_watermark_position(event, task_id, position)
+                        else:
+                            logger.error(f"❌ موقع غير صحيح: {position}")
+                            await event.answer("❌ موقع غير صحيح")
+                    else:
+                        logger.error(f"❌ تنسيق بيانات غير صحيح: {data}")
+                        await event.answer("❌ خطأ في تنسيق البيانات")
+                except ValueError as e:
+                    logger.error(f"❌ خطأ في تحليل معرف المهمة لتعيين موضع العلامة المائية: {e}, data='{data}'")
+                    await event.answer("❌ خطأ في تحليل البيانات")
             elif data.startswith("set_watermark_type_"): # Set watermark type
-                parts = data.split("_")
-                if len(parts) >= 5:
-                    try:
-                        watermark_type = parts[3]  # text or image
-                        task_id = int(parts[4])
-                        await self.set_watermark_type(event, task_id, watermark_type)
-                    except ValueError as e:
-                        logger.error(f"❌ خطأ في تحليل نوع العلامة المائية: {e}")
-                        await event.answer("❌ خطأ في تحليل البيانات")
+                try:
+                    # Extract watermark_type and task_id from data like "set_watermark_type_text_123"
+                    # Remove "set_watermark_type_" prefix
+                    remaining = data.replace("set_watermark_type_", "")
+                    
+                    # Find the last underscore to separate watermark_type from task_id
+                    last_underscore = remaining.rfind("_")
+                    if last_underscore != -1:
+                        watermark_type = remaining[:last_underscore]
+                        task_id = int(remaining[last_underscore + 1:])
+                        
+                        # Validate watermark_type
+                        valid_types = ['text', 'image']
+                        if watermark_type in valid_types:
+                            await self.set_watermark_type(event, task_id, watermark_type)
+                        else:
+                            logger.error(f"❌ نوع علامة مائية غير صحيح: {watermark_type}")
+                            await event.answer("❌ نوع علامة مائية غير صحيح")
+                    else:
+                        logger.error(f"❌ تنسيق بيانات غير صحيح: {data}")
+                        await event.answer("❌ خطأ في تنسيق البيانات")
+                except ValueError as e:
+                    logger.error(f"❌ خطأ في تحليل نوع العلامة المائية: {e}, data='{data}'")
+                    await event.answer("❌ خطأ في تحليل البيانات")
 
             elif data.startswith("toggle_sending_interval_"): # Toggle sending interval
                 parts = data.split("_")
@@ -777,106 +786,127 @@ class SimpleTelegramBot:
                         logger.error(f"❌ خطأ في تحليل معرف المهمة لتبديل العلامة المائية: {e}")
                         await event.answer("❌ خطأ في تحليل البيانات")
             elif data.startswith("watermark_config_"): # Handler for watermark config
-                parts = data.split("_")
-                if len(parts) >= 3:
-                    try:
-                        task_id = int(parts[2])
-                        await self.show_watermark_config(event, task_id)
-                    except ValueError as e:
-                        logger.error(f"❌ خطأ في تحليل معرف المهمة لتكوين العلامة المائية: {e}")
-                        await event.answer("❌ خطأ في تحليل البيانات")
+                try:
+                    # Extract task_id from data like "watermark_config_123"
+                    task_id = int(data.replace("watermark_config_", ""))
+                    await self.show_watermark_config(event, task_id)
+                except ValueError as e:
+                    logger.error(f"❌ خطأ في تحليل معرف المهمة لتكوين العلامة المائية: {e}, data='{data}'")
+                    await event.answer("❌ خطأ في تحليل البيانات")
             elif data.startswith("watermark_media_"): # Handler for watermark media settings
-                parts = data.split("_")
-                if len(parts) >= 3:
-                    try:
-                        task_id = int(parts[2])
-                        await self.show_watermark_media_settings(event, task_id)
-                    except ValueError as e:
-                        logger.error(f"❌ خطأ في تحليل معرف المهمة لإعدادات وسائط العلامة المائية: {e}")
-                        await event.answer("❌ خطأ في تحليل البيانات")
+                try:
+                    # Extract task_id from data like "watermark_media_123"
+                    task_id = int(data.replace("watermark_media_", ""))
+                    await self.show_watermark_media_settings(event, task_id)
+                except ValueError as e:
+                    logger.error(f"❌ خطأ في تحليل معرف المهمة لإعدادات وسائط العلامة المائية: {e}, data='{data}'")
+                    await event.answer("❌ خطأ في تحليل البيانات")
             elif data.startswith("watermark_text_"): # Handler for watermark text setting
-                parts = data.split("_")
-                if len(parts) >= 3:
-                    try:
-                        task_id = int(parts[2])
-                        await self.start_set_watermark_text(event, task_id)
-                    except ValueError as e:
-                        logger.error(f"❌ خطأ في تحليل معرف المهمة لتعديل نص العلامة المائية: {e}")
-                        await event.answer("❌ خطأ في تحليل البيانات")
+                try:
+                    # Extract task_id from data like "watermark_text_123"
+                    task_id = int(data.replace("watermark_text_", ""))
+                    await self.start_set_watermark_text(event, task_id)
+                except ValueError as e:
+                    logger.error(f"❌ خطأ في تحليل معرف المهمة لتعديل نص العلامة المائية: {e}, data='{data}'")
+                    await event.answer("❌ خطأ في تحليل البيانات")
             elif data.startswith("watermark_image_"): # Handler for watermark image setting
-                parts = data.split("_")
-                if len(parts) >= 3:
-                    try:
-                        task_id = int(parts[2])
-                        await self.start_set_watermark_image(event, task_id)
-                    except ValueError as e:
-                        logger.error(f"❌ خطأ في تحليل معرف المهمة لتعديل صورة العلامة المائية: {e}")
-                        await event.answer("❌ خطأ في تحليل البيانات")
+                try:
+                    # Extract task_id from data like "watermark_image_123"
+                    task_id = int(data.replace("watermark_image_", ""))
+                    await self.start_set_watermark_image(event, task_id)
+                except ValueError as e:
+                    logger.error(f"❌ خطأ في تحليل معرف المهمة لتعديل صورة العلامة المائية: {e}, data='{data}'")
+                    await event.answer("❌ خطأ في تحليل البيانات")
             elif data.startswith("watermark_position_"): # Handler for watermark position setting
-                parts = data.split("_")
-                if len(parts) >= 3:
-                    try:
-                        task_id = int(parts[2])
-                        await self.show_watermark_position_settings(event, task_id)
-                    except ValueError as e:
-                        logger.error(f"❌ خطأ في تحليل معرف المهمة لتعديل موقع العلامة المائية: {e}")
-                        await event.answer("❌ خطأ في تحليل البيانات")
+                try:
+                    # Extract task_id from data like "watermark_position_123"
+                    task_id = int(data.replace("watermark_position_", ""))
+                    await self.show_watermark_position_settings(event, task_id)
+                except ValueError as e:
+                    logger.error(f"❌ خطأ في تحليل معرف المهمة لتعديل موقع العلامة المائية: {e}, data='{data}'")
+                    await event.answer("❌ خطأ في تحليل البيانات")
             elif data.startswith("watermark_appearance_"): # Handler for watermark appearance setting
-                parts = data.split("_")
-                if len(parts) >= 3:
-                    try:
-                        task_id = int(parts[2])
-                        await self.show_watermark_appearance_settings(event, task_id)
-                    except ValueError as e:
-                        logger.error(f"❌ خطأ في تحليل معرف المهمة لتعديل مظهر العلامة المائية: {e}")
-                        await event.answer("❌ خطأ في تحليل البيانات")
+                try:
+                    # Extract task_id from data like "watermark_appearance_123"
+                    task_id = int(data.replace("watermark_appearance_", ""))
+                    await self.show_watermark_appearance_settings(event, task_id)
+                except ValueError as e:
+                    logger.error(f"❌ خطأ في تحليل معرف المهمة لتعديل مظهر العلامة المائية: {e}, data='{data}'")
+                    await event.answer("❌ خطأ في تحليل البيانات")
             elif data.startswith("toggle_watermark_photos_"): # Handler for toggle watermark photos
-                parts = data.split("_")
-                if len(parts) >= 4:
-                    try:
-                        task_id = int(parts[3])
-                        await self.toggle_watermark_media_type(event, task_id, 'photos')
-                    except ValueError as e:
-                        logger.error(f"❌ خطأ في تحليل معرف المهمة لتبديل العلامة المائية للصور: {e}")
-                        await event.answer("❌ خطأ في تحليل البيانات")
+                try:
+                    # Extract task_id from data like "toggle_watermark_photos_123"
+                    task_id = int(data.replace("toggle_watermark_photos_", ""))
+                    await self.toggle_watermark_media_type(event, task_id, 'photos')
+                except ValueError as e:
+                    logger.error(f"❌ خطأ في تحليل معرف المهمة لتبديل العلامة المائية للصور: {e}, data='{data}'")
+                    await event.answer("❌ خطأ في تحليل البيانات")
             elif data.startswith("toggle_watermark_videos_"): # Handler for toggle watermark videos
-                parts = data.split("_")
-                if len(parts) >= 4:
-                    try:
-                        task_id = int(parts[3])
-                        await self.toggle_watermark_media_type(event, task_id, 'videos')
-                    except ValueError as e:
-                        logger.error(f"❌ خطأ في تحليل معرف المهمة لتبديل العلامة المائية للفيديوهات: {e}")
-                        await event.answer("❌ خطأ في تحليل البيانات")
+                try:
+                    # Extract task_id from data like "toggle_watermark_videos_123"
+                    task_id = int(data.replace("toggle_watermark_videos_", ""))
+                    await self.toggle_watermark_media_type(event, task_id, 'videos')
+                except ValueError as e:
+                    logger.error(f"❌ خطأ في تحليل معرف المهمة لتبديل العلامة المائية للفيديوهات: {e}, data='{data}'")
+                    await event.answer("❌ خطأ في تحليل البيانات")
             elif data.startswith("toggle_watermark_documents_"): # Handler for toggle watermark documents
-                parts = data.split("_")
-                if len(parts) >= 4:
-                    try:
-                        task_id = int(parts[3])
-                        await self.toggle_watermark_media_type(event, task_id, 'documents')
-                    except ValueError as e:
-                        logger.error(f"❌ خطأ في تحليل معرف المهمة لتبديل العلامة المائية للمستندات: {e}")
-                        await event.answer("❌ خطأ في تحليل البيانات")
+                try:
+                    # Extract task_id from data like "toggle_watermark_documents_123"
+                    task_id = int(data.replace("toggle_watermark_documents_", ""))
+                    await self.toggle_watermark_media_type(event, task_id, 'documents')
+                except ValueError as e:
+                    logger.error(f"❌ خطأ في تحليل معرف المهمة لتبديل العلامة المائية للمستندات: {e}, data='{data}'")
+                    await event.answer("❌ خطأ في تحليل البيانات")
             elif data.startswith("set_watermark_position_"): # Handler for set watermark position
-                parts = data.split("_")
-                if len(parts) >= 5:
-                    try:
-                        task_id = int(parts[3])
-                        position = parts[4]
-                        await self.set_watermark_position(event, task_id, position)
-                    except (ValueError, IndexError) as e:
-                        logger.error(f"❌ خطأ في تحليل معرف المهمة لتحديد موقع العلامة المائية: {e}, data='{data}', parts={parts}")
-                        await event.answer("❌ خطأ في تحليل البيانات")
+                try:
+                    # Extract task_id and position from data like "set_watermark_position_top_left_123"
+                    # Remove "set_watermark_position_" prefix
+                    remaining = data.replace("set_watermark_position_", "")
+                    
+                    # Find the last underscore to separate position from task_id
+                    last_underscore = remaining.rfind("_")
+                    if last_underscore != -1:
+                        position = remaining[:last_underscore]
+                        task_id = int(remaining[last_underscore + 1:])
+                        
+                        # Validate position
+                        valid_positions = ['top_left', 'top', 'top_right', 'bottom_left', 'bottom', 'bottom_right', 'center']
+                        if position in valid_positions:
+                            await self.set_watermark_position(event, task_id, position)
+                        else:
+                            logger.error(f"❌ موقع غير صحيح: {position}")
+                            await event.answer("❌ موقع غير صحيح")
+                    else:
+                        logger.error(f"❌ تنسيق بيانات غير صحيح: {data}")
+                        await event.answer("❌ خطأ في تنسيق البيانات")
+                except (ValueError, IndexError) as e:
+                    logger.error(f"❌ خطأ في تحليل معرف المهمة لتحديد موقع العلامة المائية: {e}, data='{data}'")
+                    await event.answer("❌ خطأ في تحليل البيانات")
             elif data.startswith("edit_watermark_"): # Handler for editing watermark appearance
-                parts = data.split("_")
-                if len(parts) >= 4:
-                    try:
-                        setting_type = parts[2]  # size, opacity, font_size, color
-                        task_id = int(parts[3])
-                        await self.start_edit_watermark_setting(event, task_id, setting_type)
-                    except (ValueError, IndexError) as e:
-                        logger.error(f"❌ خطأ في تحليل معرف المهمة لتحرير العلامة المائية: {e}, data='{data}', parts={parts}")
-                        await event.answer("❌ خطأ في تحليل البيانات")
+                try:
+                    # Extract setting_type and task_id from data like "edit_watermark_size_123"
+                    # Remove "edit_watermark_" prefix
+                    remaining = data.replace("edit_watermark_", "")
+                    
+                    # Find the last underscore to separate setting_type from task_id
+                    last_underscore = remaining.rfind("_")
+                    if last_underscore != -1:
+                        setting_type = remaining[:last_underscore]
+                        task_id = int(remaining[last_underscore + 1:])
+                        
+                        # Validate setting_type
+                        valid_settings = ['size', 'opacity', 'font_size', 'color']
+                        if setting_type in valid_settings:
+                            await self.start_edit_watermark_setting(event, task_id, setting_type)
+                        else:
+                            logger.error(f"❌ نوع إعداد غير صحيح: {setting_type}")
+                            await event.answer("❌ نوع إعداد غير صحيح")
+                    else:
+                        logger.error(f"❌ تنسيق بيانات غير صحيح: {data}")
+                        await event.answer("❌ خطأ في تنسيق البيانات")
+                except ValueError as e:
+                    logger.error(f"❌ خطأ في تحليل معرف المهمة لتحرير العلامة المائية: {e}, data='{data}'")
+                    await event.answer("❌ خطأ في تحليل البيانات")
             elif data.startswith("source_admins_"): # Handler for source admins
                 parts = data.split("_")
                 if len(parts) >= 4:
