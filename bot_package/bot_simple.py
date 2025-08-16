@@ -435,14 +435,12 @@ class SimpleTelegramBot:
                         await event.answer("❌ خطأ في تحليل البيانات")
             # ===== Audio Metadata Event Handlers =====
             elif data.startswith("audio_metadata_settings_"):
-                parts = data.split("_")
-                if len(parts) >= 3:
-                    try:
-                        task_id = int(parts[2])
-                        await self.audio_metadata_settings(event, task_id)
-                    except ValueError as e:
-                        logger.error(f"❌ خطأ في تحليل معرف المهمة لإعدادات الوسوم الصوتية: {e}")
-                        await event.answer("❌ خطأ في تحليل البيانات")
+                try:
+                    task_id = int(data.replace("audio_metadata_settings_", ""))
+                    await self.audio_metadata_settings(event, task_id)
+                except ValueError as e:
+                    logger.error(f"❌ خطأ في تحليل معرف المهمة لإعدادات الوسوم الصوتية: {e}")
+                    await event.answer("❌ خطأ في تحليل البيانات")
             elif data.startswith("toggle_audio_metadata_"):
                 parts = data.split("_")
                 if len(parts) >= 3:
@@ -472,14 +470,12 @@ class SimpleTelegramBot:
                         logger.error(f"❌ خطأ في تحليل معرف المهمة لتعيين قالب الوسوم: {e}")
                         await event.answer("❌ خطأ في تحليل البيانات")
             elif data.startswith("album_art_settings_"):
-                parts = data.split("_")
-                if len(parts) >= 3:
-                    try:
-                        task_id = int(parts[2])
-                        await self.album_art_settings(event, task_id)
-                    except ValueError as e:
-                        logger.error(f"❌ خطأ في تحليل معرف المهمة لإعدادات صورة الغلاف: {e}")
-                        await event.answer("❌ خطأ في تحليل البيانات")
+                try:
+                    task_id = int(data.replace("album_art_settings_", ""))
+                    await self.album_art_settings(event, task_id)
+                except ValueError as e:
+                    logger.error(f"❌ خطأ في تحليل معرف المهمة لإعدادات صورة الغلاف: {e}")
+                    await event.answer("❌ خطأ في تحليل البيانات")
             elif data.startswith("album_art_options_"):
                 parts = data.split("_")
                 if len(parts) >= 3:
@@ -514,14 +510,12 @@ class SimpleTelegramBot:
                 except ValueError:
                     await event.answer("❌ خطأ في تحليل البيانات")
             elif data.startswith("audio_merge_settings_"):
-                parts = data.split("_")
-                if len(parts) >= 3:
-                    try:
-                        task_id = int(parts[2])
-                        await self.audio_merge_settings(event, task_id)
-                    except ValueError as e:
-                        logger.error(f"❌ خطأ في تحليل معرف المهمة لإعدادات دمج المقاطع: {e}")
-                        await event.answer("❌ خطأ في تحليل البيانات")
+                try:
+                    task_id = int(data.replace("audio_merge_settings_", ""))
+                    await self.audio_merge_settings(event, task_id)
+                except ValueError as e:
+                    logger.error(f"❌ خطأ في تحليل معرف المهمة لإعدادات دمج المقاطع: {e}")
+                    await event.answer("❌ خطأ في تحليل البيانات")
             elif data.startswith("toggle_audio_merge_"):
                 try:
                     task_id = int(data.replace("toggle_audio_merge_", ""))
@@ -593,14 +587,12 @@ class SimpleTelegramBot:
                 except Exception:
                     await event.answer("❌ خطأ في تحليل البيانات")
             elif data.startswith("advanced_audio_settings_"):
-                parts = data.split("_")
-                if len(parts) >= 3:
-                    try:
-                        task_id = int(parts[2])
-                        await self.advanced_audio_settings(event, task_id)
-                    except ValueError as e:
-                        logger.error(f"❌ خطأ في تحليل معرف المهمة للإعدادات المتقدمة للوسوم: {e}")
-                        await event.answer("❌ خطأ في تحليل البيانات")
+                try:
+                    task_id = int(data.replace("advanced_audio_settings_", ""))
+                    await self.advanced_audio_settings(event, task_id)
+                except ValueError as e:
+                    logger.error(f"❌ خطأ في تحليل معرف المهمة للإعدادات المتقدمة للوسوم: {e}")
+                    await event.answer("❌ خطأ في تحليل البيانات")
             elif data.startswith("toggle_char_limit_"): # Toggle character limit
                 parts = data.split("_")
                 if len(parts) >= 4:
