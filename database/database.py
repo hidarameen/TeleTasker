@@ -1605,7 +1605,7 @@ class Database:
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                SELECT admin_user_id, is_allowed 
+                SELECT admin_user_id, admin_username, admin_first_name, is_allowed, source_chat_id, admin_signature
                 FROM task_admin_filters 
                 WHERE task_id = ? AND admin_user_id = ?
             ''', (task_id, admin_user_id))
@@ -1614,7 +1614,11 @@ class Database:
             if result:
                 return {
                     'admin_user_id': result['admin_user_id'],
-                    'is_allowed': bool(result['is_allowed'])
+                    'admin_username': result['admin_username'] or '',
+                    'admin_first_name': result['admin_first_name'] or '',
+                    'is_allowed': bool(result['is_allowed']),
+                    'source_chat_id': result['source_chat_id'] or '',
+                    'admin_signature': result['admin_signature'] or ''
                 }
             return None
 
@@ -1624,7 +1628,7 @@ class Database:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute('''
-                    SELECT admin_user_id, admin_username, admin_first_name, is_allowed, source_chat_id
+                    SELECT admin_user_id, admin_username, admin_first_name, is_allowed, source_chat_id, admin_signature
                     FROM task_admin_filters 
                     WHERE task_id = ?
                     ORDER BY admin_first_name, admin_username
@@ -1636,7 +1640,8 @@ class Database:
                     'admin_username': row['admin_username'] or '',
                     'admin_first_name': row['admin_first_name'] or '',
                     'is_allowed': bool(row['is_allowed']),
-                    'source_chat_id': row['source_chat_id']
+                    'source_chat_id': row['source_chat_id'],
+                    'admin_signature': row['admin_signature'] or ''
                 } for row in results]
                 
         except Exception as e:
@@ -2901,7 +2906,7 @@ class Database:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute('''
-                    SELECT admin_user_id, admin_username, admin_first_name, is_allowed, source_chat_id
+                    SELECT admin_user_id, admin_username, admin_first_name, is_allowed, source_chat_id, admin_signature
                     FROM task_admin_filters 
                     WHERE task_id = ? AND source_chat_id = ?
                     ORDER BY admin_first_name, admin_username
@@ -2913,12 +2918,127 @@ class Database:
                     'admin_username': row['admin_username'] or '',
                     'admin_first_name': row['admin_first_name'] or '',
                     'is_allowed': bool(row['is_allowed']),
-                    'source_chat_id': row['source_chat_id']
+                    'source_chat_id': row['source_chat_id'],
+                    'admin_signature': row['admin_signature'] or ''
                 } for row in results]
                 
         except Exception as e:
             logger.error(f"خطأ في الحصول على فلاتر مشرفين المصدر: {e}")
             return []
+
+    def get_admin_filters_by_source_with_stats(self, task_id: int, source_chat_id: str) -> Dict:
+        """Get admin filters for a specific source with statistics"""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                # Get admins with their status
+                cursor.execute('''
+                    SELECT admin_user_id, admin_username, admin_first_name, is_allowed, source_chat_id, admin_signature
+                    FROM task_admin_filters 
+                    WHERE task_id = ? AND source_chat_id = ?
+                    ORDER BY admin_first_name, admin_username
+                ''', (task_id, source_chat_id))
+                
+                admins = []
+                for row in cursor.fetchall():
+                    admins.append({
+                        'admin_user_id': row['admin_user_id'],
+                        'admin_username': row['admin_username'] or '',
+                        'admin_first_name': row['admin_first_name'] or '',
+                        'is_allowed': bool(row['is_allowed']),
+                        'source_chat_id': row['source_chat_id'],
+                        'admin_signature': row['admin_signature'] or ''
+                    })
+                
+                # Get statistics
+                cursor.execute('''
+                    SELECT 
+                        COUNT(*) as total_count,
+                        SUM(CASE WHEN is_allowed = 1 THEN 1 ELSE 0 END) as allowed_count,
+                        SUM(CASE WHEN is_allowed = 0 THEN 1 ELSE 0 END) as blocked_count
+                    FROM task_admin_filters 
+                    WHERE task_id = ? AND source_chat_id = ?
+                ''', (task_id, source_chat_id))
+                
+                stats = cursor.fetchone()
+                
+                return {
+                    'admins': admins,
+                    'stats': {
+                        'total': stats['total_count'] if stats else 0,
+                        'allowed': stats['allowed_count'] if stats else 0,
+                        'blocked': stats['blocked_count'] if stats else 0
+                    }
+                }
+                
+        except Exception as e:
+            logger.error(f"خطأ في الحصول على فلاتر مشرفين المصدر مع الإحصائيات: {e}")
+            return {'admins': [], 'stats': {'total': 0, 'allowed': 0, 'blocked': 0}}
+
+    def update_admin_signature(self, task_id: int, admin_user_id: int, source_chat_id: str, admin_signature: str):
+        """Update admin signature for a specific admin in a source"""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute('''
+                    UPDATE task_admin_filters 
+                    SET admin_signature = ?, updated_at = CURRENT_TIMESTAMP
+                    WHERE task_id = ? AND admin_user_id = ? AND source_chat_id = ?
+                ''', (admin_signature, task_id, admin_user_id, source_chat_id))
+                conn.commit()
+                return cursor.rowcount > 0
+        except Exception as e:
+            logger.error(f"خطأ في تحديث توقيع المشرف: {e}")
+            return False
+
+    def bulk_update_admin_permissions(self, task_id: int, source_chat_id: str, admin_permissions: Dict[int, bool]):
+        """Bulk update admin permissions for a specific source"""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                updated_count = 0
+                
+                for admin_user_id, is_allowed in admin_permissions.items():
+                    cursor.execute('''
+                        UPDATE task_admin_filters 
+                        SET is_allowed = ?, updated_at = CURRENT_TIMESTAMP
+                        WHERE task_id = ? AND admin_user_id = ? AND source_chat_id = ?
+                    ''', (is_allowed, task_id, admin_user_id, source_chat_id))
+                    updated_count += cursor.rowcount
+                
+                conn.commit()
+                return updated_count
+        except Exception as e:
+            logger.error(f"خطأ في تحديث صلاحيات المشرفين: {e}")
+            return 0
+
+    def get_admin_by_signature(self, task_id: int, source_chat_id: str, admin_signature: str) -> Optional[Dict]:
+        """Get admin by signature for a specific source"""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute('''
+                    SELECT admin_user_id, admin_username, admin_first_name, is_allowed, source_chat_id, admin_signature
+                    FROM task_admin_filters 
+                    WHERE task_id = ? AND source_chat_id = ? AND admin_signature = ?
+                ''', (task_id, source_chat_id, admin_signature))
+                
+                result = cursor.fetchone()
+                if result:
+                    return {
+                        'admin_user_id': result['admin_user_id'],
+                        'admin_username': result['admin_username'] or '',
+                        'admin_first_name': result['admin_first_name'] or '',
+                        'is_allowed': bool(result['is_allowed']),
+                        'source_chat_id': result['source_chat_id'],
+                        'admin_signature': result['admin_signature'] or ''
+                    }
+                return None
+                
+        except Exception as e:
+            logger.error(f"خطأ في البحث عن المشرف بالتوقيع: {e}")
+            return None
 
     def toggle_admin_filter(self, task_id: int, admin_user_id: int, source_chat_id: str = None):
         """Toggle admin filter status"""
@@ -2954,19 +3074,17 @@ class Database:
 
     def get_admin_filters_for_source(self, task_id: int, source_chat_id: str) -> List[Dict]:
         """Get admin filters for a specific source channel"""
-        # For now, return all admin filters for the task since we don't track source-specific admins yet
-        # In the future, we can enhance the schema to track which source each admin belongs to
-        return self.get_admin_filters(task_id)
+        # Use the source-specific admin filter function
+        return self.get_admin_filters_by_source(task_id, source_chat_id)
 
     def clear_admin_filters_for_source(self, task_id: int, source_chat_id: str):
-        """Clear admin filters for a specific source (for now clears all for the task)"""
-        # For now, we'll clear all admins for the task when refreshing any source
-        # In the future, we can enhance to track source-specific admins
+        """Clear admin filters for a specific source"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                DELETE FROM task_admin_filters WHERE task_id = ?
-            ''', (task_id,))
+                DELETE FROM task_admin_filters 
+                WHERE task_id = ? AND source_chat_id = ?
+            ''', (task_id, source_chat_id))
             conn.commit()
             return cursor.rowcount
 
@@ -2985,7 +3103,8 @@ class Database:
 
     def add_admin_filter_with_previous_permission(self, task_id: int, admin_user_id: int, 
                                                  admin_username: str = None, admin_first_name: str = None, 
-                                                 previous_permissions: Dict[int, bool] = None):
+                                                 previous_permissions: Dict[int, bool] = None, source_chat_id: str = None,
+                                                 admin_signature: str = None):
         """Add admin filter while preserving previous permissions if they exist"""
         # Check if this admin had previous permissions
         if previous_permissions and admin_user_id in previous_permissions:
@@ -2995,7 +3114,7 @@ class Database:
             is_allowed = True  # Default for new admins
             logger.info(f"✅ مشرف جديد {admin_user_id}: إذن افتراضي = True")
 
-        return self.add_admin_filter(task_id, admin_user_id, admin_username, admin_first_name, is_allowed)
+        return self.add_admin_filter(task_id, admin_user_id, admin_username, admin_first_name, is_allowed, source_chat_id, admin_signature)
 
     def is_advanced_filter_enabled(self, task_id: int, filter_type: str) -> bool:
         """Check if an advanced filter is enabled for a task"""

@@ -2071,6 +2071,37 @@ class SimpleTelegramBot:
                     except ValueError as e:
                         logger.error(f"❌ خطأ في تحليل معرف المهمة/المصدر: {e}")
                         await event.answer("❌ خطأ في تحليل البيانات")
+            elif data.startswith("manage_signatures_"): # Handler for managing admin signatures
+                parts = data.split("_")
+                if len(parts) >= 4:
+                    try:
+                        task_id = int(parts[2])
+                        source_chat_id = parts[3]
+                        await self.manage_admin_signatures(event, task_id, source_chat_id)
+                    except ValueError as e:
+                        logger.error(f"❌ خطأ في تحليل معرف المهمة/المصدر: {e}")
+                        await event.answer("❌ خطأ في تحليل البيانات")
+            elif data.startswith("edit_admin_signature_"): # Handler for editing admin signature
+                parts = data.split("_")
+                if len(parts) >= 6:
+                    try:
+                        task_id = int(parts[3])
+                        admin_user_id = int(parts[4])
+                        source_chat_id = parts[5]
+                        await self.edit_admin_signature(event, task_id, admin_user_id, source_chat_id)
+                    except ValueError as e:
+                        logger.error(f"❌ خطأ في تحليل معرف المهمة/المشرف/المصدر: {e}")
+                        await event.answer("❌ خطأ في تحليل البيانات")
+            elif data.startswith("manage_signatures_"): # Handler for managing admin signatures
+                parts = data.split("_")
+                if len(parts) >= 4:
+                    try:
+                        task_id = int(parts[2])
+                        source_chat_id = parts[3]
+                        await self.manage_admin_signatures(event, task_id, source_chat_id)
+                    except ValueError as e:
+                        logger.error(f"❌ خطأ في تحليل معرف المهمة/المصدر: {e}")
+                        await event.answer("❌ خطأ في تحليل البيانات")
 
         except Exception as e:
             import traceback
@@ -2525,6 +2556,30 @@ class SimpleTelegramBot:
                     self.clear_user_state(user_id)
                     # Send new message instead of editing
                     await self.send_sending_interval_settings(event, task_id)
+                return
+            elif current_user_state.startswith('edit_signature_'): # Handle editing admin signature
+                try:
+                    parts = current_user_state.split('_')
+                    if len(parts) >= 4:
+                        task_id = int(parts[2])
+                        admin_user_id = int(parts[3])
+                        source_chat_id = current_user_data.get('source_chat_id', '')
+                        if not source_chat_id:
+                            # Try to extract from state if not in data
+                            source_chat_id = parts[4] if len(parts) > 4 else ''
+                        
+                        if source_chat_id:
+                            await self.handle_signature_input(event, task_id, admin_user_id, source_chat_id)
+                        else:
+                            await self.edit_or_send_message(event, "❌ خطأ في تحديد المصدر")
+                            self.clear_user_state(user_id)
+                    else:
+                        await self.edit_or_send_message(event, "❌ خطأ في تحليل البيانات")
+                        self.clear_user_state(user_id)
+                except Exception as e:
+                    logger.error(f"خطأ في معالجة إدخال توقيع المشرف: {e}")
+                    await self.edit_or_send_message(event, "❌ حدث خطأ، يرجى المحاولة مرة أخرى")
+                    self.clear_user_state(user_id)
                 return
                 
             elif current_user_state == 'editing_rate_count': # Handle editing rate count
@@ -10243,8 +10298,10 @@ class SimpleTelegramBot:
             try:
                 from telethon.tl.types import ChannelParticipantsAdmins
                 
-                # First get from database (cached)
-                cached_admins = self.db.get_admin_filters_by_source(task_id, str(source_chat_id))
+                # First get from database (cached) with statistics
+                admin_data = self.db.get_admin_filters_by_source_with_stats(task_id, str(source_chat_id))
+                cached_admins = admin_data['admins']
+                stats = admin_data['stats']
                 
                 # Get source name
                 sources = self.db.get_task_sources(task_id)
@@ -10262,37 +10319,33 @@ class SimpleTelegramBot:
                         logger.info(f"📋 تم جلب {len(admins_data)} مشرف من التليجرام للمصدر {source_chat_id}")
                         
                         # Clear existing admins for this source first
-                        with self.db.get_connection() as conn:
-                            cursor = conn.cursor()
-                            cursor.execute(
-                                "DELETE FROM task_admin_filters WHERE task_id = ? AND source_chat_id = ?",
-                                (task_id, str(source_chat_id))
-                            )
-                            conn.commit()
-                            logger.info(f"🗑️ تم حذف المشرفين السابقين للمصدر {source_chat_id}")
+                        self.db.clear_admin_filters_for_source(task_id, str(source_chat_id))
+                        logger.info(f"🗑️ تم حذف المشرفين السابقين للمصدر {source_chat_id}")
                         
                         # Save to database
                         saved_count = 0
-                        for admin_data in admins_data:
+                        for admin_data_item in admins_data:
                             try:
                                 self.db.add_admin_filter(
                                     task_id, 
-                                    admin_data['id'], 
-                                    admin_data.get('username'),
-                                    admin_data.get('first_name', ''),
+                                    admin_data_item['id'], 
+                                    admin_data_item.get('username'),
+                                    admin_data_item.get('first_name', ''),
                                     True,  # Default allow
                                     str(source_chat_id),
-                                    admin_data.get('custom_title', '')  # Save admin signature
+                                    admin_data_item.get('custom_title', '')  # Save admin signature
                                 )
                                 saved_count += 1
-                                logger.debug(f"✅ تم حفظ المشرف: {admin_data.get('first_name', 'Unknown')} (ID: {admin_data['id']})")
+                                logger.debug(f"✅ تم حفظ المشرف: {admin_data_item.get('first_name', 'Unknown')} (ID: {admin_data_item['id']})")
                             except Exception as e:
-                                logger.error(f"❌ خطأ في حفظ المشرف {admin_data.get('first_name', 'Unknown')}: {e}")
+                                logger.error(f"❌ خطأ في حفظ المشرف {admin_data_item.get('first_name', 'Unknown')}: {e}")
                         
                         logger.info(f"💾 تم حفظ {saved_count} من {len(admins_data)} مشرف في قاعدة البيانات")
                         
                         # Reload from database
-                        cached_admins = self.db.get_admin_filters_by_source(task_id, str(source_chat_id))
+                        admin_data = self.db.get_admin_filters_by_source_with_stats(task_id, str(source_chat_id))
+                        cached_admins = admin_data['admins']
+                        stats = admin_data['stats']
                         logger.info(f"📊 تم تحميل {len(cached_admins)} مشرف من قاعدة البيانات")
                 
                 if not cached_admins:
@@ -10349,19 +10402,24 @@ class SimpleTelegramBot:
                     ],
                     [
                         Button.inline("❌ تعطيل الكل", f"disable_all_source_admins_{task_id}_{source_chat_id}"),
+                        Button.inline("✏️ إدارة التوقيعات", f"manage_signatures_{task_id}_{source_chat_id}")
+                    ],
+                    [
                         Button.inline("🔙 رجوع", f"admin_list_{task_id}")
                     ]
                 ])
                 
-                enabled_count = len([a for a in cached_admins if a['is_allowed']])
-                total_count = len(cached_admins)
+                # Use stats from database
+                enabled_count = stats['allowed']
+                total_count = stats['total']
                 
                 await event.edit(
                     f"👥 مشرفو المصدر: {source_name}\n\n"
                     f"📊 المفعل: {enabled_count} من أصل {total_count}\n"
                     f"✅ مفعل - سيتم قبول رسائل هذا المشرف\n"
                     f"❌ معطل - سيتم تجاهل رسائل هذا المشرف\n\n"
-                    f"💡 فقط رسائل المشرفين المفعلين ستمر عبر الفلتر",
+                    f"💡 فقط رسائل المشرفين المفعلين ستمر عبر الفلتر\n"
+                    f"🔍 يتم الفلترة حسب توقيع المشرف (post_author)",
                     buttons=buttons
                 )
                 
@@ -10437,13 +10495,7 @@ class SimpleTelegramBot:
             previous_permissions = {admin['admin_user_id']: admin['is_allowed'] for admin in existing_admins}
             
             # Clear existing entries for this source
-            with self.db.get_connection() as conn:
-                cursor = conn.cursor()
-                cursor.execute(
-                    "DELETE FROM task_admin_filters WHERE task_id = ? AND source_chat_id = ?",
-                    (task_id, source_chat_id)
-                )
-                conn.commit()
+            self.db.clear_admin_filters_for_source(task_id, source_chat_id)
             
             # Use Bot API to get admins instead of UserBot
             from config import BOT_TOKEN
@@ -10538,13 +10590,7 @@ class SimpleTelegramBot:
                     previous_permissions = {admin['admin_user_id']: admin['is_allowed'] for admin in existing_admins}
                     
                     # Clear existing entries for this source
-                    with self.db.get_connection() as conn:
-                        cursor = conn.cursor()
-                        cursor.execute(
-                            "DELETE FROM task_admin_filters WHERE task_id = ? AND source_chat_id = ?",
-                            (task_id, source_chat_id)
-                        )
-                        conn.commit()
+                    self.db.clear_admin_filters_for_source(task_id, source_chat_id)
                     
                     # Use Bot API to get admins instead of UserBot
                     from config import BOT_TOKEN
@@ -10562,7 +10608,7 @@ class SimpleTelegramBot:
                                 admin_data.get('first_name', ''),
                                 is_allowed,
                                 source_chat_id,
-                                admin_data.get('custom_title', '')  # Save admin signature
+                                admin_data.get('admin_signature', '')  # Save admin signature
                             )
                         
                         total_updated += len(admins_data)
@@ -10590,11 +10636,7 @@ class SimpleTelegramBot:
                 await self.show_admin_list(event, task_id)
             else:
                 try:
-                    await event.edit(
-                        f"❌ فشل في تحديث قوائم المشرفين\n\n"
-                        f"الخطأ: {str(e)}",
-                        buttons=[[Button.inline("🔙 رجوع", f"admin_list_{task_id}")]]
-                    )
+                    await event.answer(f"❌ خطأ: {str(e)}")
                 except:
                     await event.answer(f"❌ خطأ: {str(e)}")
 
@@ -10608,16 +10650,17 @@ class SimpleTelegramBot:
             return
             
         try:
-            with self.db.get_connection() as conn:
-                cursor = conn.cursor()
-                cursor.execute('''
-                    UPDATE task_admin_filters 
-                    SET is_allowed = TRUE, updated_at = CURRENT_TIMESTAMP
-                    WHERE task_id = ? AND source_chat_id = ?
-                ''', (task_id, source_chat_id))
-                conn.commit()
-                
-                updated_count = cursor.rowcount
+            # Get all admins for this source
+            admins = self.db.get_admin_filters_by_source(task_id, source_chat_id)
+            if not admins:
+                await event.answer("❌ لا يوجد مشرفين في هذا المصدر")
+                return
+            
+            # Create permissions dict for bulk update
+            admin_permissions = {admin['admin_user_id']: True for admin in admins}
+            
+            # Bulk update all admins to allowed
+            updated_count = self.db.bulk_update_admin_permissions(task_id, source_chat_id, admin_permissions)
                 
             await event.answer(f"✅ تم تفعيل {updated_count} مشرف")
             
@@ -10638,16 +10681,17 @@ class SimpleTelegramBot:
             return
             
         try:
-            with self.db.get_connection() as conn:
-                cursor = conn.cursor()
-                cursor.execute('''
-                    UPDATE task_admin_filters 
-                    SET is_allowed = FALSE, updated_at = CURRENT_TIMESTAMP
-                    WHERE task_id = ? AND source_chat_id = ?
-                ''', (task_id, source_chat_id))
-                conn.commit()
-                
-                updated_count = cursor.rowcount
+            # Get all admins for this source
+            admins = self.db.get_admin_filters_by_source(task_id, source_chat_id)
+            if not admins:
+                await event.answer("❌ لا يوجد مشرفين في هذا المصدر")
+                return
+            
+            # Create permissions dict for bulk update
+            admin_permissions = {admin['admin_user_id']: False for admin in admins}
+            
+            # Bulk update all admins to blocked
+            updated_count = self.db.bulk_update_admin_permissions(task_id, source_chat_id, admin_permissions)
                 
             await event.answer(f"❌ تم تعطيل {updated_count} مشرف")
             
@@ -10661,6 +10705,144 @@ class SimpleTelegramBot:
     async def refresh_source_admin_list(self, event, task_id, source_chat_id):
         """Refresh the admin list for a source"""
         await self.show_source_admins(event, task_id, source_chat_id)
+
+    async def manage_admin_signatures(self, event, task_id, source_chat_id):
+        """Manage admin signatures for a specific source"""
+        user_id = event.sender_id
+        task = self.db.get_task(task_id, user_id)
+        
+        if not task:
+            await event.answer("❌ المهمة غير موجودة")
+            return
+            
+        try:
+            # Get admins with their signatures
+            admins = self.db.get_admin_filters_by_source(task_id, source_chat_id)
+            if not admins:
+                await event.answer("❌ لا يوجد مشرفين في هذا المصدر")
+                return
+            
+            # Get source name
+            sources = self.db.get_task_sources(task_id)
+            source_name = next((s['chat_name'] for s in sources if str(s['chat_id']) == str(source_chat_id)), f"محادثة {source_chat_id}")
+            
+            # Create buttons for signature management
+            buttons = []
+            for admin in admins:
+                admin_name = admin['admin_first_name'] or admin['admin_username'] or f"User {admin['admin_user_id']}"
+                admin_signature = admin.get('admin_signature', '')
+                
+                # Truncate if too long for button
+                if len(admin_name) > 25:
+                    admin_name = admin_name[:22] + "..."
+                
+                if admin_signature:
+                    button_text = f"✏️ {admin_name} ({admin_signature})"
+                else:
+                    button_text = f"➕ {admin_name} (بدون توقيع)"
+                
+                buttons.append([Button.inline(
+                    button_text, 
+                    f"edit_admin_signature_{task_id}_{admin['admin_user_id']}_{source_chat_id}"
+                )])
+            
+            # Add control buttons
+            buttons.extend([
+                [Button.inline("🔄 تحديث من التليجرام", f"refresh_source_admins_{task_id}_{source_chat_id}")],
+                [Button.inline("🔙 رجوع", f"source_admins_{task_id}_{source_chat_id}")]
+            ])
+            
+            await event.edit(
+                f"✏️ إدارة توقيعات المشرفين - {source_name}\n\n"
+                f"📝 التوقيع هو الاسم الذي يظهر في رسائل المشرف\n"
+                f"🔍 يتم استخدامه لفلترة الرسائل حسب المؤلف\n\n"
+                f"💡 اضغط على المشرف لتعديل توقيعه",
+                buttons=buttons
+            )
+            
+        except Exception as e:
+            logger.error(f"خطأ في إدارة توقيعات المشرفين: {e}")
+            await event.answer("❌ حدث خطأ")
+
+    async def edit_admin_signature(self, event, task_id, admin_user_id, source_chat_id):
+        """Edit admin signature"""
+        user_id = event.sender_id
+        task = self.db.get_task(task_id, user_id)
+        
+        if not task:
+            await event.answer("❌ المهمة غير موجودة")
+            return
+            
+        try:
+            # Get admin info
+            admin = self.db.get_admin_filter_setting(task_id, admin_user_id)
+            if not admin:
+                await event.answer("❌ المشرف غير موجود")
+                return
+            
+            admin_name = admin['admin_first_name'] or admin['admin_username'] or f"User {admin_user_id}"
+            current_signature = admin.get('admin_signature', '')
+            
+            # Set user state for signature input
+            self.set_user_state(user_id, f"edit_signature_{task_id}_{admin_user_id}", {'source_chat_id': source_chat_id})
+            
+            buttons = [[Button.inline("🔙 رجوع", f"manage_signatures_{task_id}_{source_chat_id}")]]
+            
+            if current_signature:
+                message = (
+                    f"✏️ تعديل توقيع المشرف: {admin_name}\n\n"
+                    f"📝 التوقيع الحالي: {current_signature}\n\n"
+                    f"💬 أرسل التوقيع الجديد أو 'حذف' لحذف التوقيع"
+                )
+            else:
+                message = (
+                    f"✏️ إضافة توقيع للمشرف: {admin_name}\n\n"
+                    f"💬 أرسل التوقيع الجديد"
+                )
+            
+            await event.edit(message, buttons=buttons)
+            
+        except Exception as e:
+            logger.error(f"خطأ في تعديل توقيع المشرف: {e}")
+            await event.answer("❌ حدث خطأ")
+
+    async def handle_signature_input(self, event, task_id, admin_user_id, source_chat_id):
+        """Handle admin signature input"""
+        user_id = event.sender_id
+        task = self.db.get_task(task_id, user_id)
+        
+        if not task:
+            await self.edit_or_send_message(event, "❌ المهمة غير موجودة")
+            return
+            
+        message_text = event.message.text.strip()
+        
+        try:
+            if message_text.lower() == 'حذف':
+                # Remove signature
+                success = self.db.update_admin_signature(task_id, admin_user_id, source_chat_id, '')
+                if success:
+                    await self.edit_or_send_message(event, "✅ تم حذف توقيع المشرف")
+                else:
+                    await self.edit_or_send_message(event, "❌ فشل في حذف التوقيع")
+            else:
+                # Update signature
+                success = self.db.update_admin_signature(task_id, admin_user_id, source_chat_id, message_text)
+                if success:
+                    await self.edit_or_send_message(event, f"✅ تم تحديث توقيع المشرف إلى: {message_text}")
+                else:
+                    await self.edit_or_send_message(event, "❌ فشل في تحديث التوقيع")
+            
+            # Clear user state
+            self.clear_user_state(user_id)
+            
+            # Return to signature management
+            await self.manage_admin_signatures(event, task_id, source_chat_id)
+            
+        except Exception as e:
+            logger.error(f"خطأ في معالجة توقيع المشرف: {e}")
+            await self.edit_or_send_message(event, "❌ حدث خطأ أثناء التحديث")
+            self.clear_user_state(user_id)
 
     # Duplicate function removed - using the one at line 9137
 

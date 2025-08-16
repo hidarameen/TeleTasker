@@ -1540,10 +1540,10 @@ class UserbotService:
             
             # Check if admin filter is enabled for this task
             admin_filter_enabled = db.is_advanced_filter_enabled(task_id, 'admin')
-            logger.error(f"👮‍♂️ [ADMIN FILTER] فلتر المشرفين مُفعل: {admin_filter_enabled}")
+            logger.info(f"👮‍♂️ [ADMIN FILTER] فلتر المشرفين مُفعل: {admin_filter_enabled}")
 
             if not admin_filter_enabled:
-                logger.error(f"👮‍♂️ فلتر المشرفين غير مُفعل للمهمة {task_id} - السماح للجميع")
+                logger.info(f"👮‍♂️ فلتر المشرفين غير مُفعل للمهمة {task_id} - السماح للجميع")
                 return True
             
             # Get admin filter settings for this specific source
@@ -1551,7 +1551,7 @@ class UserbotService:
             
             if not admin_filters:
                 # No admin filters configured for this source, allow everything
-                logger.error(f"🔍 لا توجد فلاتر مشرفين للمصدر {source_chat_id} - السماح افتراضياً")
+                logger.info(f"🔍 لا توجد فلاتر مشرفين للمصدر {source_chat_id} - السماح افتراضياً")
                 return True
             
             # Get post_author from message (author signature)
@@ -1559,10 +1559,10 @@ class UserbotService:
             
             if not post_author:
                 # No post_author signature, might be regular user message or channel without signatures enabled
-                logger.error(f"🔍 لا يوجد post_author في الرسالة - السماح افتراضياً")
+                logger.info(f"🔍 لا يوجد post_author في الرسالة - السماح افتراضياً")
                 return True
             
-            logger.error(f"🔍 فحص توقيع المشرف: '{post_author}' في المصدر {source_chat_id}")
+            logger.info(f"🔍 فحص توقيع المشرف: '{post_author}' في المصدر {source_chat_id}")
             
             # Check if post_author signature matches any admin signature and is allowed
             for admin_filter in admin_filters:
@@ -1570,11 +1570,11 @@ class UserbotService:
                 if admin_signature and admin_signature == post_author:
                     is_allowed = admin_filter['is_allowed']
                     admin_name = admin_filter.get('admin_first_name', admin_signature)
-                    logger.error(f"🔍 المشرف '{admin_name}' (توقيع: '{post_author}') موجود في فلتر المشرفين: {'مسموح' if is_allowed else 'محظور'}")
+                    logger.info(f"🔍 المشرف '{admin_name}' (توقيع: '{post_author}') موجود في فلتر المشرفين: {'مسموح' if is_allowed else 'محظور'}")
                     return is_allowed
             
             # Post author signature not found in admin filters - default allow
-            logger.error(f"🔍 توقيع المشرف '{post_author}' غير موجود في فلتر المشرفين - السماح افتراضياً")
+            logger.info(f"🔍 توقيع المشرف '{post_author}' غير موجود في فلتر المشرفين - السماح افتراضياً")
             return True
             
         except Exception as e:
@@ -2415,18 +2415,20 @@ class UserbotService:
                 logger.debug(f"👮‍♂️ لا توجد فلاتر مشرفين للمهمة {task_id}")
                 return False
             
-            # First pass: Look for exact matches (higher priority)
+            # First pass: Look for exact matches (highest priority)
             exact_matches = []
             partial_matches = []
             
             for admin in admin_filters:
                 admin_name = admin.get('admin_first_name', '').strip()
                 admin_username = admin.get('admin_username', '').strip()
+                admin_signature = admin.get('admin_signature', '').strip()
                 is_allowed = admin.get('is_allowed', True)
                 
                 # Exact matching logic (highest priority)
                 exact_name_match = admin_name and author_signature.lower() == admin_name.lower()
                 exact_username_match = admin_username and author_signature.lower() == admin_username.lower()
+                exact_signature_match = admin_signature and author_signature.lower() == admin_signature.lower()
                 
                 # Partial matching logic (lower priority)  
                 partial_name_match = admin_name and admin_name != author_signature and (
@@ -2438,38 +2440,45 @@ class UserbotService:
                     author_signature.lower() in admin_username.lower()
                 )
                 
+                partial_signature_match = admin_signature and admin_signature != author_signature and (
+                    author_signature.lower() in admin_signature.lower() or
+                    admin_signature.lower() in author_signature.lower()
+                )
+                
                 # Collect matches by priority
-                if exact_name_match or exact_username_match:
+                if exact_name_match or exact_username_match or exact_signature_match:
                     exact_matches.append((admin, 'exact'))
-                    logger.debug(f"🎯 تطابق دقيق مع المشرف '{admin_name}' (@{admin_username})")
-                elif partial_name_match or partial_username_match:
+                    logger.debug(f"🎯 تطابق دقيق مع المشرف '{admin_name}' (@{admin_username}) [توقيع: {admin_signature}]")
+                elif partial_name_match or partial_username_match or partial_signature_match:
                     partial_matches.append((admin, 'partial'))
-                    logger.debug(f"🔍 تطابق جزئي مع المشرف '{admin_name}' (@{admin_username})")
+                    logger.debug(f"🔍 تطابق جزئي مع المشرف '{admin_name}' (@{admin_username}) [توقيع: {admin_signature}]")
             
             # Process exact matches first (highest priority)
             for admin, match_type in exact_matches:
                 admin_name = admin.get('admin_first_name', '').strip()
                 admin_username = admin.get('admin_username', '').strip()
+                admin_signature = admin.get('admin_signature', '').strip()
                 is_allowed = admin.get('is_allowed', True)
                 
                 if not is_allowed:
-                    logger.error(f"🚫 [SIGNATURE BLOCK - EXACT] توقيع المؤلف '{author_signature}' محظور (تطابق دقيق مع '{admin_name}' أو '{admin_username}') - سيتم حظر الرسالة")
+                    logger.error(f"🚫 [SIGNATURE BLOCK - EXACT] توقيع المؤلف '{author_signature}' محظور (تطابق دقيق مع '{admin_name}' أو '{admin_username}' أو '{admin_signature}') - سيتم حظر الرسالة")
                     return True
                 else:
-                    logger.info(f"✅ [SIGNATURE ALLOW - EXACT] توقيع المؤلف '{author_signature}' مسموح (تطابق دقيق مع '{admin_name}' أو '{admin_username}') - سيتم توجيه الرسالة")
+                    logger.info(f"✅ [SIGNATURE ALLOW - EXACT] توقيع المؤلف '{author_signature}' مسموح (تطابق دقيق مع '{admin_name}' أو '{admin_username}' أو '{admin_signature}') - سيتم توجيه الرسالة")
                     return False
             
             # Process partial matches only if no exact matches found
             for admin, match_type in partial_matches:
                 admin_name = admin.get('admin_first_name', '').strip()
                 admin_username = admin.get('admin_username', '').strip()
+                admin_signature = admin.get('admin_signature', '').strip()
                 is_allowed = admin.get('is_allowed', True)
                 
                 if not is_allowed:
-                    logger.error(f"🚫 [SIGNATURE BLOCK - PARTIAL] توقيع المؤلف '{author_signature}' محظور (تطابق جزئي مع '{admin_name}' أو '{admin_username}') - سيتم حظر الرسالة")
+                    logger.error(f"🚫 [SIGNATURE BLOCK - PARTIAL] توقيع المؤلف '{author_signature}' محظور (تطابق جزئي مع '{admin_name}' أو '{admin_username}' أو '{admin_signature}') - سيتم حظر الرسالة")
                     return True
                 else:
-                    logger.info(f"✅ [SIGNATURE ALLOW - PARTIAL] توقيع المؤلف '{author_signature}' مسموح (تطابق جزئي مع '{admin_name}' أو '{admin_username}') - سيتم توجيه الرسالة")
+                    logger.info(f"✅ [SIGNATURE ALLOW - PARTIAL] توقيع المؤلف '{author_signature}' مسموح (تطابق جزئي مع '{admin_name}' أو '{admin_username}' أو '{admin_signature}') - سيتم توجيه الرسالة")
                     return False
             
             # If signature not found in admin list, allow by default
