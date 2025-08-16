@@ -442,14 +442,12 @@ class SimpleTelegramBot:
                     logger.error(f"❌ خطأ في تحليل معرف المهمة لإعدادات الوسوم الصوتية: {e}")
                     await event.answer("❌ خطأ في تحليل البيانات")
             elif data.startswith("toggle_audio_metadata_"):
-                parts = data.split("_")
-                if len(parts) >= 3:
-                    try:
-                        task_id = int(parts[2])
-                        await self.toggle_audio_metadata(event, task_id)
-                    except ValueError as e:
-                        logger.error(f"❌ خطأ في تحليل معرف المهمة لتبديل الوسوم الصوتية: {e}")
-                        await event.answer("❌ خطأ في تحليل البيانات")
+                try:
+                    task_id = int(data.replace("toggle_audio_metadata_", ""))
+                    await self.toggle_audio_metadata(event, task_id)
+                except ValueError as e:
+                    logger.error(f"❌ خطأ في تحليل معرف المهمة لتبديل الوسوم الصوتية: {e}")
+                    await event.answer("❌ خطأ في تحليل البيانات")
             elif data.startswith("select_audio_template_"):
                 parts = data.split("_")
                 if len(parts) >= 3:
