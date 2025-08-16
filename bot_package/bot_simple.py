@@ -480,6 +480,39 @@ class SimpleTelegramBot:
                     except ValueError as e:
                         logger.error(f"❌ خطأ في تحليل معرف المهمة لإعدادات صورة الغلاف: {e}")
                         await event.answer("❌ خطأ في تحليل البيانات")
+            elif data.startswith("album_art_options_"):
+                parts = data.split("_")
+                if len(parts) >= 3:
+                    try:
+                        task_id = int(parts[2])
+                        await self.show_album_art_options(event, task_id)
+                    except ValueError:
+                        await event.answer("❌ خطأ في تحليل البيانات")
+            elif data.startswith("upload_album_art_"):
+                try:
+                    task_id = int(data.replace("upload_album_art_", ""))
+                    self.set_user_state(user_id, 'awaiting_album_art_upload', {'task_id': task_id})
+                    await self.edit_or_send_message(event, "🖼️ أرسل الآن صورة الغلاف كصورة أو ملف.")
+                except ValueError:
+                    await event.answer("❌ خطأ في تحليل البيانات")
+            elif data.startswith("toggle_album_art_enabled_"):
+                try:
+                    task_id = int(data.replace("toggle_album_art_enabled_", ""))
+                    settings = self.db.get_audio_metadata_settings(task_id)
+                    self.db.set_album_art_settings(task_id, enabled=not bool(settings.get('album_art_enabled')))
+                    await event.answer("✅ تم التبديل")
+                    await self.album_art_settings(event, task_id)
+                except ValueError:
+                    await event.answer("❌ خطأ في تحليل البيانات")
+            elif data.startswith("toggle_apply_art_to_all_"):
+                try:
+                    task_id = int(data.replace("toggle_apply_art_to_all_", ""))
+                    settings = self.db.get_audio_metadata_settings(task_id)
+                    self.db.set_album_art_settings(task_id, apply_to_all=not bool(settings.get('apply_art_to_all')))
+                    await event.answer("✅ تم التبديل")
+                    await self.album_art_settings(event, task_id)
+                except ValueError:
+                    await event.answer("❌ خطأ في تحليل البيانات")
             elif data.startswith("audio_merge_settings_"):
                 parts = data.split("_")
                 if len(parts) >= 3:
@@ -489,6 +522,76 @@ class SimpleTelegramBot:
                     except ValueError as e:
                         logger.error(f"❌ خطأ في تحليل معرف المهمة لإعدادات دمج المقاطع: {e}")
                         await event.answer("❌ خطأ في تحليل البيانات")
+            elif data.startswith("toggle_audio_merge_"):
+                try:
+                    task_id = int(data.replace("toggle_audio_merge_", ""))
+                    settings = self.db.get_audio_metadata_settings(task_id)
+                    self.db.set_audio_merge_settings(task_id, enabled=not bool(settings.get('audio_merge_enabled')))
+                    await event.answer("✅ تم التبديل")
+                    await self.audio_merge_settings(event, task_id)
+                except ValueError:
+                    await event.answer("❌ خطأ في تحليل البيانات")
+            elif data.startswith("intro_audio_settings_"):
+                try:
+                    task_id = int(data.replace("intro_audio_settings_", ""))
+                    await self.show_intro_audio_settings(event, task_id)
+                except ValueError:
+                    await event.answer("❌ خطأ في تحليل البيانات")
+            elif data.startswith("outro_audio_settings_"):
+                try:
+                    task_id = int(data.replace("outro_audio_settings_", ""))
+                    await self.show_outro_audio_settings(event, task_id)
+                except ValueError:
+                    await event.answer("❌ خطأ في تحليل البيانات")
+            elif data.startswith("upload_intro_audio_"):
+                try:
+                    task_id = int(data.replace("upload_intro_audio_", ""))
+                    self.set_user_state(user_id, 'awaiting_intro_audio_upload', {'task_id': task_id})
+                    await self.edit_or_send_message(event, "🎵 أرسل الآن ملف المقدمة (Audio)")
+                except ValueError:
+                    await event.answer("❌ خطأ في تحليل البيانات")
+            elif data.startswith("remove_intro_audio_"):
+                try:
+                    task_id = int(data.replace("remove_intro_audio_", ""))
+                    self.db.set_audio_merge_settings(task_id, intro_path='')
+                    await event.answer("✅ تم حذف مقطع المقدمة")
+                    await self.audio_merge_settings(event, task_id)
+                except ValueError:
+                    await event.answer("❌ خطأ في تحليل البيانات")
+            elif data.startswith("upload_outro_audio_"):
+                try:
+                    task_id = int(data.replace("upload_outro_audio_", ""))
+                    self.set_user_state(user_id, 'awaiting_outro_audio_upload', {'task_id': task_id})
+                    await self.edit_or_send_message(event, "🎵 أرسل الآن ملف الخاتمة (Audio)")
+                except ValueError:
+                    await event.answer("❌ خطأ في تحليل البيانات")
+            elif data.startswith("remove_outro_audio_"):
+                try:
+                    task_id = int(data.replace("remove_outro_audio_", ""))
+                    self.db.set_audio_merge_settings(task_id, outro_path='')
+                    await event.answer("✅ تم حذف مقطع الخاتمة")
+                    await self.audio_merge_settings(event, task_id)
+                except ValueError:
+                    await event.answer("❌ خطأ في تحليل البيانات")
+            elif data.startswith("merge_options_"):
+                try:
+                    task_id = int(data.replace("merge_options_", ""))
+                    await self.show_merge_options(event, task_id)
+                except ValueError:
+                    await event.answer("❌ خطأ في تحليل البيانات")
+            elif data.startswith("set_intro_position_"):
+                try:
+                    remaining = data.replace("set_intro_position_", "")
+                    pos, task_id_str = remaining.rsplit("_", 1)
+                    task_id = int(task_id_str)
+                    if pos in ['start', 'end']:
+                        self.db.set_audio_merge_settings(task_id, intro_position=pos)
+                        await event.answer("✅ تم تحديث موضع المقدمة")
+                        await self.audio_merge_settings(event, task_id)
+                    else:
+                        await event.answer("❌ موقع غير صحيح")
+                except Exception:
+                    await event.answer("❌ خطأ في تحليل البيانات")
             elif data.startswith("advanced_audio_settings_"):
                 parts = data.split("_")
                 if len(parts) >= 3:
@@ -2556,6 +2659,73 @@ class SimpleTelegramBot:
                     await self.edit_or_send_message(event, "❌ حدث خطأ، يرجى المحاولة مرة أخرى")
                     self.clear_user_state(user_id)
                     return
+
+            elif current_user_state == 'awaiting_album_art_upload':
+                task_id = current_user_data.get('task_id')
+                try:
+                    import os
+                    os.makedirs('album_art', exist_ok=True)
+                    file_path = None
+                    if event.message.photo or (event.message.document and 'image' in (event.message.document.mime_type or '')):
+                        file_path = f"album_art/album_art_{task_id}.jpg"
+                        await self.bot.download_media(event.message, file=file_path)
+                    else:
+                        await self.edit_or_send_message(event, "❌ يرجى إرسال صورة كصورة أو ملف.")
+                        return
+                    if file_path and os.path.exists(file_path):
+                        self.db.set_album_art_settings(task_id, path=file_path, enabled=True)
+                        await self.edit_or_send_message(event, "✅ تم حفظ صورة الغلاف")
+                        await self.album_art_settings(event, task_id)
+                    else:
+                        await self.edit_or_send_message(event, "❌ فشل في حفظ الصورة")
+                except Exception as e:
+                    logger.error(f"خطأ في حفظ صورة الغلاف: {e}")
+                    await self.edit_or_send_message(event, "❌ حدث خطأ أثناء رفع الصورة")
+                finally:
+                    self.clear_user_state(user_id)
+                return
+
+            elif current_user_state == 'awaiting_intro_audio_upload':
+                task_id = current_user_data.get('task_id')
+                try:
+                    import os
+                    os.makedirs('audio_segments', exist_ok=True)
+                    file_path = f"audio_segments/intro_{task_id}.mp3"
+                    if event.message.document and (event.message.document.mime_type or '').startswith('audio/'):
+                        await self.bot.download_media(event.message, file=file_path)
+                        self.db.set_audio_merge_settings(task_id, intro_path=file_path)
+                        await self.edit_or_send_message(event, "✅ تم حفظ مقطع المقدمة")
+                        await self.audio_merge_settings(event, task_id)
+                    else:
+                        await self.edit_or_send_message(event, "❌ يرجى إرسال ملف صوتي.")
+                        return
+                except Exception as e:
+                    logger.error(f"خطأ في حفظ مقطع المقدمة: {e}")
+                    await self.edit_or_send_message(event, "❌ حدث خطأ أثناء رفع المقطع")
+                finally:
+                    self.clear_user_state(user_id)
+                return
+
+            elif current_user_state == 'awaiting_outro_audio_upload':
+                task_id = current_user_data.get('task_id')
+                try:
+                    import os
+                    os.makedirs('audio_segments', exist_ok=True)
+                    file_path = f"audio_segments/outro_{task_id}.mp3"
+                    if event.message.document and (event.message.document.mime_type or '').startswith('audio/'):
+                        await self.bot.download_media(event.message, file=file_path)
+                        self.db.set_audio_merge_settings(task_id, outro_path=file_path)
+                        await self.edit_or_send_message(event, "✅ تم حفظ مقطع الخاتمة")
+                        await self.audio_merge_settings(event, task_id)
+                    else:
+                        await self.edit_or_send_message(event, "❌ يرجى إرسال ملف صوتي.")
+                        return
+                except Exception as e:
+                    logger.error(f"خطأ في حفظ مقطع الخاتمة: {e}")
+                    await self.edit_or_send_message(event, "❌ حدث خطأ أثناء رفع المقطع")
+                finally:
+                    self.clear_user_state(user_id)
+                return
                     
             elif current_user_state == 'editing_char_min': # Handle editing character minimum
                 task_id = current_user_data.get('task_id')
@@ -11409,14 +11579,8 @@ async def run_simple_bot():
             
         task_name = task.get('task_name', 'مهمة بدون اسم')
         
-        # Get audio metadata settings (you can implement this in database)
-        # For now, we'll show default settings
-        audio_settings = {
-            'enabled': False,
-            'template': 'default',
-            'album_art_enabled': False,
-            'audio_merge_enabled': False
-        }
+        # Load audio metadata settings from database
+        audio_settings = self.db.get_audio_metadata_settings(task_id)
         
         status_text = "🟢 مفعل" if audio_settings['enabled'] else "🔴 معطل"
         template_text = audio_settings['template'].title()
@@ -11458,12 +11622,10 @@ async def run_simple_bot():
             await event.answer("❌ المهمة غير موجودة")
             return
         
-        # Toggle the setting (implement database update)
-        current_status = False  # Get from database
-        new_status = not current_status
-        
-        # Update database (implement this)
-        # self.db.update_audio_metadata_enabled(task_id, user_id, new_status)
+        # Toggle and persist
+        current = self.db.get_audio_metadata_settings(task_id)
+        new_status = not bool(current.get('enabled', False))
+        self.db.update_audio_metadata_enabled(task_id, new_status)
         
         status_text = "🟢 مفعل" if new_status else "🔴 معطل"
         await event.answer(f"✅ تم {'تفعيل' if new_status else 'تعطيل'} الوسوم الصوتية")
@@ -11518,8 +11680,8 @@ async def run_simple_bot():
             await event.answer("❌ المهمة غير موجودة")
             return
         
-        # Update database with selected template (implement this)
-        # self.db.update_audio_metadata_template(task_id, user_id, template_name)
+        # Persist template
+        self.db.update_audio_metadata_template(task_id, template_name)
         
         template_display_name = {
             'default': 'الافتراضي',
@@ -11559,7 +11721,10 @@ async def run_simple_bot():
             f"• خيار تطبيقها فقط على الملفات بدون صورة\n"
             f"• الحفاظ على الجودة 100%\n"
             f"• دعم الصيغ: JPG, PNG, BMP, TIFF\n\n"
-            f"اختر الإعداد الذي تريد تعديله:"
+            f"الحالة: {art_status}\n"
+            f"تطبيق على الجميع: {apply_all_status}\n"
+            f"المسار الحالي: {art_path}\n\n"
+            f"اختر الإعداد الذي تريد تعديله أو ارفع صورة جديدة:"
         )
         
         await self.edit_or_send_message(event, message_text, buttons=buttons)
@@ -11576,6 +11741,7 @@ async def run_simple_bot():
         task_name = task.get('task_name', 'مهمة بدون اسم')
         
         buttons = [
+            [Button.inline("🎚️ تبديل حالة الدمج", f"toggle_audio_merge_{task_id}")],
             [Button.inline("🎵 مقطع مقدمة", f"intro_audio_settings_{task_id}")],
             [Button.inline("🎵 مقطع خاتمة", f"outro_audio_settings_{task_id}")],
             [Button.inline("⚙️ خيارات الدمج", f"merge_options_{task_id}")],
@@ -11590,6 +11756,10 @@ async def run_simple_bot():
             f"• اختيار موضع المقدمة (بداية أو نهاية)\n"
             f"• دعم جميع الصيغ الصوتية\n"
             f"• جودة عالية 320k MP3\n\n"
+            f"حالة الدمج: {merge_status}\n"
+            f"مقدمة: {intro_path}\n"
+            f"خاتمة: {outro_path}\n"
+            f"موضع المقدمة: {intro_position}\n\n"
             f"اختر الإعداد الذي تريد تعديله:"
         )
         
@@ -11607,9 +11777,8 @@ async def run_simple_bot():
         task_name = task.get('task_name', 'مهمة بدون اسم')
         
         buttons = [
-            [Button.inline("🎯 الحفاظ على الجودة", f"audio_quality_settings_{task_id}")],
-            [Button.inline("🔄 تحويل الصيغة", f"audio_format_settings_{task_id}")],
-            [Button.inline("⚡ إعدادات الأداء", f"audio_performance_settings_{task_id}")],
+            [Button.inline(f"{preserve_status} الحفاظ على الجودة", f"toggle_preserve_quality_{task_id}")],
+            [Button.inline(f"{convert_status} التحويل إلى MP3", f"toggle_convert_to_mp3_{task_id}")],
             [Button.inline("🔙 رجوع لإعدادات الوسوم الصوتية", f"audio_metadata_settings_{task_id}")]
         ]
         
@@ -11625,5 +11794,47 @@ async def run_simple_bot():
         )
         
         await self.edit_or_send_message(event, message_text, buttons=buttons)
+
+    async def show_album_art_options(self, event, task_id: int):
+        settings = self.db.get_audio_metadata_settings(task_id)
+        art_status = "🟢 مفعل" if settings.get('album_art_enabled') else "🔴 معطل"
+        apply_all_status = "🟢 نعم" if settings.get('apply_art_to_all') else "🔴 لا"
+        buttons = [
+            [Button.inline(f"🔄 تبديل صورة الغلاف ({art_status})", f"toggle_album_art_enabled_{task_id}")],
+            [Button.inline(f"📦 تطبيق على جميع الملفات ({apply_all_status})", f"toggle_apply_art_to_all_{task_id}")],
+            [Button.inline("🔙 رجوع", f"album_art_settings_{task_id}")]
+        ]
+        await self.edit_or_send_message(event, "⚙️ خيارات صورة الغلاف:", buttons=buttons)
+
+    async def show_intro_audio_settings(self, event, task_id: int):
+        settings = self.db.get_audio_metadata_settings(task_id)
+        intro_path = settings.get('intro_audio_path') or 'غير محدد'
+        buttons = [
+            [Button.inline("⬆️ رفع مقدمة", f"upload_intro_audio_{task_id}")],
+            [Button.inline("🗑️ حذف المقدمة", f"remove_intro_audio_{task_id}")],
+            [Button.inline("🔙 رجوع", f"audio_merge_settings_{task_id}")]
+        ]
+        await self.edit_or_send_message(event, f"🎵 مقدمة حالية: {intro_path}", buttons=buttons)
+
+    async def show_outro_audio_settings(self, event, task_id: int):
+        settings = self.db.get_audio_metadata_settings(task_id)
+        outro_path = settings.get('outro_audio_path') or 'غير محدد'
+        buttons = [
+            [Button.inline("⬆️ رفع خاتمة", f"upload_outro_audio_{task_id}")],
+            [Button.inline("🗑️ حذف الخاتمة", f"remove_outro_audio_{task_id}")],
+            [Button.inline("🔙 رجوع", f"audio_merge_settings_{task_id}")]
+        ]
+        await self.edit_or_send_message(event, f"🎵 خاتمة حالية: {outro_path}", buttons=buttons)
+
+    async def show_merge_options(self, event, task_id: int):
+        settings = self.db.get_audio_metadata_settings(task_id)
+        pos = settings.get('intro_position', 'start')
+        pos_text = 'البداية' if pos == 'start' else 'النهاية'
+        buttons = [
+            [Button.inline("⬆️ المقدمة في البداية", f"set_intro_position_start_{task_id}")],
+            [Button.inline("⬇️ المقدمة في النهاية", f"set_intro_position_end_{task_id}")],
+            [Button.inline("🔙 رجوع", f"audio_merge_settings_{task_id}")]
+        ]
+        await self.edit_or_send_message(event, f"⚙️ موضع المقدمة الحالي: {pos_text}", buttons=buttons)
 
     # ===== Advanced Features Menu =====
