@@ -11933,9 +11933,20 @@ async def run_simple_bot():
         
         task_name = task.get('task_name', 'مهمة بدون اسم')
         
+        # Get current album art settings
+        audio_settings = self.db.get_audio_metadata_settings(task_id)
+        art_enabled = audio_settings.get('album_art_enabled', False)
+        apply_to_all = audio_settings.get('apply_art_to_all', False)
+        art_path = audio_settings.get('album_art_path', '')
+        
+        art_status = "🟢 مفعل" if art_enabled else "🔴 معطل"
+        apply_all_status = "🟢 نعم" if apply_to_all else "🔴 لا"
+        art_path_display = art_path if art_path else "غير محدد"
+        
         buttons = [
+            [Button.inline(f"🔄 تبديل الحالة ({art_status.split()[0]})", f"toggle_album_art_enabled_{task_id}")],
             [Button.inline("🖼️ رفع صورة غلاف", f"upload_album_art_{task_id}")],
-            [Button.inline("⚙️ خيارات التطبيق", f"album_art_options_{task_id}")],
+            [Button.inline(f"⚙️ تطبيق على الجميع ({apply_all_status.split()[0]})", f"toggle_apply_art_to_all_{task_id}")],
             [Button.inline("🔙 رجوع لإعدادات الوسوم الصوتية", f"audio_metadata_settings_{task_id}")]
         ]
         
@@ -11947,9 +11958,10 @@ async def run_simple_bot():
             f"• خيار تطبيقها فقط على الملفات بدون صورة\n"
             f"• الحفاظ على الجودة 100%\n"
             f"• دعم الصيغ: JPG, PNG, BMP, TIFF\n\n"
-            f"الحالة: {art_status}\n"
-            f"تطبيق على الجميع: {apply_all_status}\n"
-            f"المسار الحالي: {art_path}\n\n"
+            f"📊 الحالة الحالية:\n"
+            f"• الحالة: {art_status}\n"
+            f"• تطبيق على الجميع: {apply_all_status}\n"
+            f"• المسار الحالي: {art_path_display}\n\n"
             f"اختر الإعداد الذي تريد تعديله أو ارفع صورة جديدة:"
         )
         
@@ -11966,8 +11978,20 @@ async def run_simple_bot():
         
         task_name = task.get('task_name', 'مهمة بدون اسم')
         
+        # Get current audio merge settings
+        audio_settings = self.db.get_audio_metadata_settings(task_id)
+        merge_enabled = audio_settings.get('audio_merge_enabled', False)
+        intro_path = audio_settings.get('intro_path', '')
+        outro_path = audio_settings.get('outro_path', '')
+        intro_position = audio_settings.get('intro_position', 'start')
+        
+        merge_status = "🟢 مفعل" if merge_enabled else "🔴 معطل"
+        intro_path_display = intro_path if intro_path else "غير محدد"
+        outro_path_display = outro_path if outro_path else "غير محدد"
+        intro_position_display = "البداية" if intro_position == 'start' else "النهاية"
+        
         buttons = [
-            [Button.inline("🎚️ تبديل حالة الدمج", f"toggle_audio_merge_{task_id}")],
+            [Button.inline(f"🎚️ تبديل حالة الدمج ({merge_status.split()[0]})", f"toggle_audio_merge_{task_id}")],
             [Button.inline("🎵 مقطع مقدمة", f"intro_audio_settings_{task_id}")],
             [Button.inline("🎵 مقطع خاتمة", f"outro_audio_settings_{task_id}")],
             [Button.inline("⚙️ خيارات الدمج", f"merge_options_{task_id}")],
@@ -11982,10 +12006,11 @@ async def run_simple_bot():
             f"• اختيار موضع المقدمة (بداية أو نهاية)\n"
             f"• دعم جميع الصيغ الصوتية\n"
             f"• جودة عالية 320k MP3\n\n"
-            f"حالة الدمج: {merge_status}\n"
-            f"مقدمة: {intro_path}\n"
-            f"خاتمة: {outro_path}\n"
-            f"موضع المقدمة: {intro_position}\n\n"
+            f"📊 الحالة الحالية:\n"
+            f"• حالة الدمج: {merge_status}\n"
+            f"• مقدمة: {intro_path_display}\n"
+            f"• خاتمة: {outro_path_display}\n"
+            f"• موضع المقدمة: {intro_position_display}\n\n"
             f"اختر الإعداد الذي تريد تعديله:"
         )
         
@@ -12002,6 +12027,14 @@ async def run_simple_bot():
         
         task_name = task.get('task_name', 'مهمة بدون اسم')
         
+        # Get current advanced settings
+        audio_settings = self.db.get_audio_metadata_settings(task_id)
+        preserve_quality = audio_settings.get('preserve_quality', True)
+        convert_to_mp3 = audio_settings.get('convert_to_mp3', False)
+        
+        preserve_status = "🟢" if preserve_quality else "🔴"
+        convert_status = "🟢" if convert_to_mp3 else "🔴"
+        
         buttons = [
             [Button.inline(f"{preserve_status} الحفاظ على الجودة", f"toggle_preserve_quality_{task_id}")],
             [Button.inline(f"{convert_status} التحويل إلى MP3", f"toggle_convert_to_mp3_{task_id}")],
@@ -12016,6 +12049,9 @@ async def run_simple_bot():
             f"• معالجة مرة واحدة وإعادة الاستخدام\n"
             f"• Cache ذكي للملفات المعالجة\n"
             f"• إعدادات الأداء والسرعة\n\n"
+            f"📊 الحالة الحالية:\n"
+            f"• الحفاظ على الجودة: {preserve_status} {'مفعل' if preserve_quality else 'معطل'}\n"
+            f"• التحويل إلى MP3: {convert_status} {'مفعل' if convert_to_mp3 else 'معطل'}\n\n"
             f"اختر الإعداد الذي تريد تعديله:"
         )
         
