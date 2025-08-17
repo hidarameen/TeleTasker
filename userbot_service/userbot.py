@@ -850,6 +850,16 @@ class UserbotService:
 
                         # Apply header and footer formatting
                         final_text = self.apply_message_formatting(formatted_text, message_settings)
+                        
+                        # فحص ما إذا كان يحتاج إلى وضع النسخ بسبب التنسيق
+                        requires_copy_mode = (
+                            original_text != modified_text or  # تم تطبيق استبدالات النص
+                            modified_text != translated_text or  # تم تطبيق الترجمة
+                            translated_text != formatted_text or  # تم تطبيق تنسيق النص
+                            message_settings['header_enabled'] or  # الترويسة مفعلة
+                            message_settings['footer_enabled'] or  # التذييل مفعل
+                            message_settings['inline_buttons_enabled']  # الأزرار الإنلاين مفعلة
+                        )
 
                         # Check if we need to use copy mode due to formatting
                         requires_copy_mode = (
@@ -904,7 +914,15 @@ class UserbotService:
                         # Send message based on forward mode
                         logger.info(f"📨 جاري إرسال الرسالة (وضع تلقائي)...")
 
-                        if forward_mode == 'copy' or requires_copy_mode:
+                        # ===== منطق الإرسال المصحح =====
+                        
+                        # تحديد الوضع النهائي للإرسال
+                        final_send_mode = self._determine_final_send_mode(forward_mode, requires_copy_mode)
+                        
+                        logger.info(f"📤 إرسال الرسالة بالوضع: {final_send_mode} (الأصلي: {forward_mode}, يتطلب نسخ: {requires_copy_mode})")
+                        
+                        # إرسال الرسالة بالوضع المحدد
+                        if final_send_mode == 'copy':
                             # Copy mode: send as new message with all formatting applied
                             if requires_copy_mode:
                                 logger.info(f"🔄 استخدام وضع النسخ بسبب التنسيق المطبق")
@@ -1033,7 +1051,7 @@ class UserbotService:
                                     event.message,
                                     silent=forwarding_settings['silent_notifications']
                                 )
-                        else:
+                        else:  # forward mode
                             # Forward mode: check if we need copy mode
                             if requires_copy_mode:
                                 logger.info(f"🔄 تحويل إلى وضع النسخ بسبب التنسيق")
@@ -1277,6 +1295,7 @@ class UserbotService:
                                         )
                                 else:
                                     # No formatting changes, forward normally
+                                    logger.info(f"📤 توجيه عادي بدون تنسيق")
                                     forwarded_msg = await client.forward_messages(
                                         target_entity,
                                         event.message,
@@ -3835,6 +3854,22 @@ class UserbotService:
             logger.error(f"تفاصيل الخطأ: {traceback.format_exc()}")
             return []
 
+    def _determine_final_send_mode(self, forward_mode: str, requires_copy_mode: bool) -> str:
+        """تحديد الوضع النهائي للإرسال - إصلاح منطق التوجيه"""
+        if forward_mode == 'copy':
+            # وضع النسخ - دائماً نسخ
+            return 'copy'
+        elif forward_mode == 'forward':
+            if requires_copy_mode:
+                # وضع التوجيه مع تنسيق - إجبار النسخ
+                logger.info(f"🔄 إجبار النسخ في وضع التوجيه بسبب التنسيق")
+                return 'copy'
+            else:
+                # وضع التوجيه بدون تنسيق - توجيه عادي
+                return 'forward'
+        else:
+            # افتراضي - توجيه
+            return 'forward'
 
 
 
