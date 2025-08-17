@@ -484,6 +484,16 @@ class SimpleTelegramBot:
                 await self.handle_start(event)
             elif data == "manage_tasks":
                 await self.show_tasks_menu(event)
+            elif data == "manage_channels":
+                await self.show_channels_menu(event)
+            elif data == "add_channel":
+                await self.start_add_channel(event)
+            elif data == "list_channels":
+                await self.list_channels(event)
+            elif data == "add_multiple_channels":
+                await self.start_add_multiple_channels(event)
+            elif data == "finish_add_channels":
+                await self.finish_add_channels(event)
             elif data == "create_task":
                 await self.start_create_task(event)
             elif data == "list_tasks":
@@ -758,6 +768,24 @@ class SimpleTelegramBot:
                     self.db.update_audio_metadata_setting(task_id, 'convert_to_mp3', not current_state)
                     await event.answer("✅ تم التبديل")
                     await self.advanced_audio_settings(event, task_id)
+                except ValueError:
+                    await event.answer("❌ خطأ في تحليل البيانات")
+            elif data.startswith("delete_channel_"):
+                try:
+                    channel_id = int(data.replace("delete_channel_", ""))
+                    await self.delete_channel(event, channel_id)
+                except ValueError:
+                    await event.answer("❌ خطأ في تحليل البيانات")
+            elif data.startswith("edit_channel_"):
+                try:
+                    channel_id = int(data.replace("edit_channel_", ""))
+                    await self.edit_channel(event, channel_id)
+                except ValueError:
+                    await event.answer("❌ خطأ في تحليل البيانات")
+            elif data.startswith("refresh_channel_"):
+                try:
+                    channel_id = int(data.replace("refresh_channel_", ""))
+                    await self.refresh_channel_info(event, channel_id)
                 except ValueError:
                     await event.answer("❌ خطأ في تحليل البيانات")
             elif data.startswith("audio_merge_settings_"):
@@ -4535,6 +4563,7 @@ class SimpleTelegramBot:
         buttons = [
             [Button.inline("➕ إنشاء مهمة جديدة", b"create_task")],
             [Button.inline("📋 عرض المهام", b"list_tasks")],
+            [Button.inline("📺 إدارة القنوات", b"manage_channels")],
             [Button.inline("🏠 القائمة الرئيسية", b"back_main")]
         ]
 
