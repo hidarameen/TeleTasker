@@ -5366,3 +5366,76 @@ class Database:
             conn.commit()
             return True
 
+    def update_audio_metadata_setting(self, task_id: int, setting_name: str, value) -> bool:
+        """Update a specific audio metadata setting for a task"""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                # Get current settings
+                current = self.get_audio_metadata_settings(task_id)
+                
+                # Update the specific setting
+                current[setting_name] = value
+                
+                # Insert or replace with updated values
+                cursor.execute('''
+                    INSERT OR REPLACE INTO task_audio_metadata_settings (
+                        task_id, enabled, template, album_art_enabled, album_art_path, apply_art_to_all,
+                        audio_merge_enabled, intro_audio_path, outro_audio_path, intro_position,
+                        preserve_original, convert_to_mp3, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                ''', (
+                    task_id, 
+                    current.get('enabled', False),
+                    current.get('template', 'default'),
+                    current.get('album_art_enabled', False),
+                    current.get('album_art_path', ''),
+                    current.get('apply_art_to_all', False),
+                    current.get('audio_merge_enabled', False),
+                    current.get('intro_audio_path', ''),
+                    current.get('outro_audio_path', ''),
+                    current.get('intro_position', 'start'),
+                    current.get('preserve_original', True),
+                    current.get('convert_to_mp3', False)
+                ))
+                
+                conn.commit()
+                logger.info(f"✅ تم تحديث إعداد الوسوم الصوتية '{setting_name}' للمهمة {task_id}: {value}")
+                return True
+                
+        except Exception as e:
+            logger.error(f"❌ خطأ في تحديث إعداد الوسوم الصوتية '{setting_name}' للمهمة {task_id}: {e}")
+            return False
+
+    def set_audio_quality_settings(self, task_id: int, preserve_original: Optional[bool] = None, convert_to_mp3: Optional[bool] = None) -> bool:
+        """Update audio quality/format settings for a task"""
+        current = self.get_audio_metadata_settings(task_id)
+        new_values = {
+            'enabled': current['enabled'],
+            'template': current['template'],
+            'album_art_enabled': current['album_art_enabled'],
+            'album_art_path': current['album_art_path'],
+            'apply_art_to_all': current['apply_art_to_all'],
+            'audio_merge_enabled': current['audio_merge_enabled'],
+            'intro_audio_path': current['intro_audio_path'],
+            'outro_audio_path': current['outro_audio_path'],
+            'intro_position': current['intro_position'],
+            'preserve_original': current['preserve_original'] if preserve_original is None else bool(preserve_original),
+            'convert_to_mp3': current['convert_to_mp3'] if convert_to_mp3 is None else bool(convert_to_mp3)
+        }
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT OR REPLACE INTO task_audio_metadata_settings (
+                    task_id, enabled, template, album_art_enabled, album_art_path, apply_art_to_all,
+                    audio_merge_enabled, intro_audio_path, outro_audio_path, intro_position,
+                    preserve_original, convert_to_mp3, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ''', (task_id, new_values['enabled'], new_values['template'], new_values['album_art_enabled'],
+                  new_values['album_art_path'], new_values['apply_art_to_all'], new_values['audio_merge_enabled'],
+                  new_values['intro_audio_path'], new_values['outro_audio_path'], new_values['intro_position'],
+                  new_values['preserve_original'], new_values['convert_to_mp3']))
+            conn.commit()
+            return True
+

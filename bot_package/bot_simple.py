@@ -740,6 +740,26 @@ class SimpleTelegramBot:
                     await self.album_art_settings(event, task_id)
                 except ValueError:
                     await event.answer("❌ خطأ في تحليل البيانات")
+            elif data.startswith("toggle_preserve_quality_"):
+                try:
+                    task_id = int(data.replace("toggle_preserve_quality_", ""))
+                    settings = self.db.get_audio_metadata_settings(task_id)
+                    current_state = settings.get('preserve_quality', True)
+                    self.db.update_audio_metadata_setting(task_id, 'preserve_quality', not current_state)
+                    await event.answer("✅ تم التبديل")
+                    await self.advanced_audio_settings(event, task_id)
+                except ValueError:
+                    await event.answer("❌ خطأ في تحليل البيانات")
+            elif data.startswith("toggle_convert_to_mp3_"):
+                try:
+                    task_id = int(data.replace("toggle_convert_to_mp3_", ""))
+                    settings = self.db.get_audio_metadata_settings(task_id)
+                    current_state = settings.get('convert_to_mp3', False)
+                    self.db.update_audio_metadata_setting(task_id, 'convert_to_mp3', not current_state)
+                    await event.answer("✅ تم التبديل")
+                    await self.advanced_audio_settings(event, task_id)
+                except ValueError:
+                    await event.answer("❌ خطأ في تحليل البيانات")
             elif data.startswith("audio_merge_settings_"):
                 try:
                     task_id = int(data.replace("audio_merge_settings_", ""))
