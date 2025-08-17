@@ -692,24 +692,26 @@ class SimpleTelegramBot:
                     logger.error(f"❌ خطأ في تحليل معرف المهمة لتبديل الوسوم الصوتية: {e}")
                     await event.answer("❌ خطأ في تحليل البيانات")
             elif data.startswith("select_audio_template_"):
-                parts = data.split("_")
-                if len(parts) >= 3:
-                    try:
-                        task_id = int(parts[2])
-                        await self.select_audio_template(event, task_id)
-                    except ValueError as e:
-                        logger.error(f"❌ خطأ في تحليل معرف المهمة لاختيار قالب الوسوم: {e}")
-                        await event.answer("❌ خطأ في تحليل البيانات")
+                try:
+                    task_id = int(data.replace("select_audio_template_", ""))
+                    await self.select_audio_template(event, task_id)
+                except ValueError as e:
+                    logger.error(f"❌ خطأ في تحليل معرف المهمة لاختيار قالب الوسوم: {e}")
+                    await event.answer("❌ خطأ في تحليل البيانات")
             elif data.startswith("set_audio_template_"):
-                parts = data.split("_")
-                if len(parts) >= 4:
-                    try:
-                        task_id = int(parts[2])
-                        template_name = parts[3]
+                try:
+                    # Extract task_id and template_name from "set_audio_template_7_default"
+                    remaining = data.replace("set_audio_template_", "")
+                    parts = remaining.split("_", 1)
+                    if len(parts) >= 2:
+                        task_id = int(parts[0])
+                        template_name = parts[1]
                         await self.set_audio_template(event, task_id, template_name)
-                    except ValueError as e:
-                        logger.error(f"❌ خطأ في تحليل معرف المهمة لتعيين قالب الوسوم: {e}")
+                    else:
                         await event.answer("❌ خطأ في تحليل البيانات")
+                except ValueError as e:
+                    logger.error(f"❌ خطأ في تحليل معرف المهمة لتعيين قالب الوسوم: {e}")
+                    await event.answer("❌ خطأ في تحليل البيانات")
             elif data.startswith("album_art_settings_"):
                 try:
                     task_id = int(data.replace("album_art_settings_", ""))
