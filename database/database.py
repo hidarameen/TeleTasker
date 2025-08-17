@@ -714,6 +714,28 @@ class Database:
                 )
             ''')
 
+            # Create audio template settings table
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS task_audio_template_settings (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    task_id INTEGER NOT NULL,
+                    title_template TEXT DEFAULT '$title',
+                    artist_template TEXT DEFAULT '$artist',
+                    album_artist_template TEXT DEFAULT '$album_artist',
+                    album_template TEXT DEFAULT '$album',
+                    year_template TEXT DEFAULT '$year',
+                    genre_template TEXT DEFAULT '$genre',
+                    composer_template TEXT DEFAULT '$composer',
+                    comment_template TEXT DEFAULT '$comment',
+                    track_template TEXT DEFAULT '$track',
+                    length_template TEXT DEFAULT '$length',
+                    lyrics_template TEXT DEFAULT '$lyrics',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (task_id) REFERENCES tasks (id) ON DELETE CASCADE
+                )
+            ''')
+
             conn.commit()
             logger.info("✅ تم تهيئة جداول SQLite بنجاح مع الفلاتر المتقدمة والميزات الجديدة")
             
@@ -5424,6 +5446,140 @@ class Database:
                 
         except Exception as e:
             logger.error(f"❌ خطأ في تحديث إعداد الوسوم الصوتية '{setting_name}' للمهمة {task_id}: {e}")
+            return False
+
+    # Audio Template Settings Management
+    def get_audio_template_settings(self, task_id: int) -> Dict:
+        """Get audio template settings for a task"""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute('''
+                    SELECT title_template, artist_template, album_artist_template, album_template,
+                           year_template, genre_template, composer_template, comment_template,
+                           track_template, length_template, lyrics_template
+                    FROM task_audio_template_settings
+                    WHERE task_id = ?
+                ''', (task_id,))
+                
+                result = cursor.fetchone()
+                if result:
+                    return {
+                        'title_template': result[0] or '$title',
+                        'artist_template': result[1] or '$artist',
+                        'album_artist_template': result[2] or '$album_artist',
+                        'album_template': result[3] or '$album',
+                        'year_template': result[4] or '$year',
+                        'genre_template': result[5] or '$genre',
+                        'composer_template': result[6] or '$composer',
+                        'comment_template': result[7] or '$comment',
+                        'track_template': result[8] or '$track',
+                        'length_template': result[9] or '$length',
+                        'lyrics_template': result[10] or '$lyrics'
+                    }
+                else:
+                    # Return default values if no settings exist
+                    return {
+                        'title_template': '$title',
+                        'artist_template': '$artist',
+                        'album_artist_template': '$album_artist',
+                        'album_template': '$album',
+                        'year_template': '$year',
+                        'genre_template': '$genre',
+                        'composer_template': '$composer',
+                        'comment_template': '$comment',
+                        'track_template': '$track',
+                        'length_template': '$length',
+                        'lyrics_template': '$lyrics'
+                    }
+                    
+        except Exception as e:
+            logger.error(f"❌ خطأ في جلب إعدادات قالب الوسوم الصوتية للمهمة {task_id}: {e}")
+            return {
+                'title_template': '$title',
+                'artist_template': '$artist',
+                'album_artist_template': '$album_artist',
+                'album_template': '$album',
+                'year_template': '$year',
+                'genre_template': '$genre',
+                'composer_template': '$composer',
+                'comment_template': '$comment',
+                'track_template': '$track',
+                'length_template': '$length',
+                'lyrics_template': '$lyrics'
+            }
+
+    def update_audio_template_setting(self, task_id: int, tag_name: str, template_value: str) -> bool:
+        """Update a specific audio template setting for a task"""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                # Check if record exists
+                cursor.execute('SELECT 1 FROM task_audio_template_settings WHERE task_id = ?', (task_id,))
+                exists = cursor.fetchone()
+                
+                if exists:
+                    # Update existing record
+                    cursor.execute(f'''
+                        UPDATE task_audio_template_settings 
+                        SET {tag_name}_template = ?, updated_at = CURRENT_TIMESTAMP
+                        WHERE task_id = ?
+                    ''', (template_value, task_id))
+                else:
+                    # Create new record with default values
+                    cursor.execute('''
+                        INSERT INTO task_audio_template_settings (
+                            task_id, title_template, artist_template, album_artist_template, album_template,
+                            year_template, genre_template, composer_template, comment_template,
+                            track_template, length_template, lyrics_template, created_at, updated_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                    ''', (
+                        task_id,
+                        '$title' if tag_name != 'title' else template_value,
+                        '$artist' if tag_name != 'artist' else template_value,
+                        '$album_artist' if tag_name != 'album_artist' else template_value,
+                        '$album' if tag_name != 'album' else template_value,
+                        '$year' if tag_name != 'year' else template_value,
+                        '$genre' if tag_name != 'genre' else template_value,
+                        '$composer' if tag_name != 'composer' else template_value,
+                        '$comment' if tag_name != 'comment' else template_value,
+                        '$track' if tag_name != 'track' else template_value,
+                        '$length' if tag_name != 'length' else template_value,
+                        '$lyrics' if tag_name != 'lyrics' else template_value
+                    ))
+                
+                conn.commit()
+                logger.info(f"✅ تم تحديث قالب الوسم '{tag_name}' للمهمة {task_id}: {template_value}")
+                return True
+                
+        except Exception as e:
+            logger.error(f"❌ خطأ في تحديث قالب الوسم '{tag_name}' للمهمة {task_id}: {e}")
+            return False
+
+    def reset_audio_template_settings(self, task_id: int) -> bool:
+        """Reset audio template settings to default values"""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                cursor.execute('''
+                    INSERT OR REPLACE INTO task_audio_template_settings (
+                        task_id, title_template, artist_template, album_artist_template, album_template,
+                        year_template, genre_template, composer_template, comment_template,
+                        track_template, length_template, lyrics_template, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                ''', (
+                    task_id, '$title', '$artist', '$album_artist', '$album', '$year', '$genre',
+                    '$composer', '$comment', '$track', '$length', '$lyrics'
+                ))
+                
+                conn.commit()
+                logger.info(f"✅ تم إعادة تعيين إعدادات قالب الوسوم الصوتية للمهمة {task_id}")
+                return True
+                
+        except Exception as e:
+            logger.error(f"❌ خطأ في إعادة تعيين إعدادات قالب الوسوم الصوتية للمهمة {task_id}: {e}")
             return False
 
     def set_audio_quality_settings(self, task_id: int, preserve_original: Optional[bool] = None, convert_to_mp3: Optional[bool] = None) -> bool:
