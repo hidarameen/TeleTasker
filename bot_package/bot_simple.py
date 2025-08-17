@@ -122,37 +122,236 @@ class SimpleTelegramBot:
 
     # ===== Audio Metadata method wrappers (inside class) =====
     async def audio_metadata_settings(self, event, task_id):
-        return await globals()['audio_metadata_settings'](self, event, task_id)
+        user_id = event.sender_id
+        task = self.db.get_task(task_id, user_id)
+        if not task:
+            await event.answer("❌ المهمة غير موجودة")
+            return
+        task_name = task.get('task_name', 'مهمة بدون اسم')
+        audio_settings = self.db.get_audio_metadata_settings(task_id)
+        status_text = "🟢 مفعل" if audio_settings['enabled'] else "🔴 معطل"
+        template_text = audio_settings.get('template', 'default').title()
+        art_status = "🟢 مفعل" if audio_settings.get('album_art_enabled') else "🔴 معطل"
+        merge_status = "🟢 مفعل" if audio_settings.get('audio_merge_enabled') else "🔴 معطل"
+        buttons = [
+            [Button.inline(f"🔄 تبديل الحالة ({status_text})", f"toggle_audio_metadata_{task_id}")],
+            [Button.inline(f"📋 اختيار القالب ({template_text})", f"select_audio_template_{task_id}")],
+            [Button.inline(f"🖼️ صورة الغلاف ({art_status})", f"album_art_settings_{task_id}")],
+            [Button.inline(f"🔗 دمج المقاطع ({merge_status})", f"audio_merge_settings_{task_id}")],
+            [Button.inline("⚙️ إعدادات متقدمة", f"advanced_audio_settings_{task_id}")],
+            [Button.inline("🔙 رجوع لإعدادات المهمة", f"task_settings_{task_id}")]
+        ]
+        message_text = (
+            f"🎵 إعدادات الوسوم الصوتية للمهمة: {task_name}\n\n"
+            f"📊 الحالة: {status_text}\n"
+            f"📋 القالب: {template_text}\n"
+            f"🖼️ صورة الغلاف: {art_status}\n"
+            f"🔗 دمج المقاطع: {merge_status}\n\n"
+            f"📝 الوصف:\n"
+            f"تعديل الوسوم الصوتية (ID3v2) للملفات الصوتية قبل إعادة التوجيه\n"
+            f"• دعم جميع أنواع الوسوم (Title, Artist, Album, Year, Genre, etc.)\n"
+            f"• قوالب جاهزة للاستخدام\n"
+            f"• صورة غلاف مخصصة\n"
+            f"• دمج مقاطع صوتية إضافية\n"
+            f"• الحفاظ على الجودة 100%"
+        )
+        await self.edit_or_send_message(event, message_text, buttons=buttons)
 
     async def toggle_audio_metadata(self, event, task_id):
-        return await globals()['toggle_audio_metadata'](self, event, task_id)
+        user_id = event.sender_id
+        task = self.db.get_task(task_id, user_id)
+        if not task:
+            await event.answer("❌ المهمة غير موجودة")
+            return
+        current = self.db.get_audio_metadata_settings(task_id)
+        new_status = not bool(current.get('enabled', False))
+        self.db.update_audio_metadata_enabled(task_id, new_status)
+        await event.answer(f"✅ تم {'تفعيل' if new_status else 'تعطيل'} الوسوم الصوتية")
+        await self.audio_metadata_settings(event, task_id)
 
     async def select_audio_template(self, event, task_id):
-        return await globals()['select_audio_template'](self, event, task_id)
+        user_id = event.sender_id
+        task = self.db.get_task(task_id, user_id)
+        if not task:
+            await event.answer("❌ المهمة غير موجودة")
+            return
+        task_name = task.get('task_name', 'مهمة بدون اسم')
+        buttons = [
+            [Button.inline("🔹 القالب الافتراضي", f"set_audio_template_{task_id}_default")],
+            [Button.inline("🔹 قالب محسن", f"set_audio_template_{task_id}_enhanced")],
+            [Button.inline("🔹 قالب بسيط", f"set_audio_template_{task_id}_minimal")],
+            [Button.inline("🔹 قالب احترافي", f"set_audio_template_{task_id}_professional")],
+            [Button.inline("🔹 قالب مخصص", f"set_audio_template_{task_id}_custom")],
+            [Button.inline("🔙 رجوع لإعدادات الوسوم الصوتية", f"audio_metadata_settings_{task_id}")]
+        ]
+        message_text = (
+            f"📋 اختيار قالب الوسوم الصوتية للمهمة: {task_name}\n\n"
+            f"🔹 القوالب المتاحة:\n\n"
+            f"**🔹 القالب الافتراضي**:\n"
+            f"يحافظ على الوسوم الأصلية مع إضافة تعليق\n\n"
+            f"**🔹 قالب محسن**:\n"
+            f"يضيف 'Enhanced' للعنوان ويحسن التعليق\n\n"
+            f"**🔹 قالب بسيط**:\n"
+            f"يحتوي على الوسوم الأساسية فقط\n\n"
+            f"**🔹 قالب احترافي**:\n"
+            f"مناسب للاستخدام التجاري والمهني\n\n"
+            f"**🔹 قالب مخصص**:\n"
+            f"للعلامات التجارية والتخصيص الكامل\n\n"
+            f"اختر القالب المناسب لاحتياجاتك:"
+        )
+        await self.edit_or_send_message(event, message_text, buttons=buttons)
 
     async def set_audio_template(self, event, task_id, template_name):
-        return await globals()['set_audio_template'](self, event, task_id, template_name)
+        user_id = event.sender_id
+        task = self.db.get_task(task_id, user_id)
+        if not task:
+            await event.answer("❌ المهمة غير موجودة")
+            return
+        self.db.update_audio_metadata_template(task_id, template_name)
+        template_display_name = {
+            'default': 'الافتراضي',
+            'enhanced': 'محسن',
+            'minimal': 'بسيط',
+            'professional': 'احترافي',
+            'custom': 'مخصص'
+        }.get(template_name, template_name)
+        await event.answer(f"✅ تم اختيار قالب '{template_display_name}'")
+        await self.audio_metadata_settings(event, task_id)
 
     async def album_art_settings(self, event, task_id):
-        return await globals()['album_art_settings'](self, event, task_id)
+        user_id = event.sender_id
+        task = self.db.get_task(task_id, user_id)
+        if not task:
+            await event.answer("❌ المهمة غير موجودة")
+            return
+        task_name = task.get('task_name', 'مهمة بدون اسم')
+        audio_settings = self.db.get_audio_metadata_settings(task_id)
+        art_status = "🟢 مفعل" if audio_settings.get('album_art_enabled') else "🔴 معطل"
+        apply_all_status = "🟢 نعم" if audio_settings.get('apply_art_to_all') else "🔴 لا"
+        art_path = audio_settings.get('album_art_path') or 'غير محدد'
+        buttons = [
+            [Button.inline("🖼️ رفع صورة غلاف", f"upload_album_art_{task_id}")],
+            [Button.inline("⚙️ خيارات التطبيق", f"album_art_options_{task_id}")],
+            [Button.inline("🔙 رجوع لإعدادات الوسوم الصوتية", f"audio_metadata_settings_{task_id}")]
+        ]
+        message_text = (
+            f"🖼️ إعدادات صورة الغلاف للمهمة: {task_name}\n\n"
+            f"📝 الوصف:\n"
+            f"• رفع صورة غلاف مخصصة للملفات الصوتية\n"
+            f"• خيار تطبيقها على جميع الملفات\n"
+            f"• خيار تطبيقها فقط على الملفات بدون صورة\n"
+            f"• الحفاظ على الجودة 100%\n"
+            f"• دعم الصيغ: JPG, PNG, BMP, TIFF\n\n"
+            f"الحالة: {art_status}\n"
+            f"تطبيق على الجميع: {apply_all_status}\n"
+            f"المسار الحالي: {art_path}\n\n"
+            f"اختر الإعداد الذي تريد تعديله أو ارفع صورة جديدة:"
+        )
+        await self.edit_or_send_message(event, message_text, buttons=buttons)
 
     async def audio_merge_settings(self, event, task_id):
-        return await globals()['audio_merge_settings'](self, event, task_id)
+        user_id = event.sender_id
+        task = self.db.get_task(task_id, user_id)
+        if not task:
+            await event.answer("❌ المهمة غير موجودة")
+            return
+        task_name = task.get('task_name', 'مهمة بدون اسم')
+        audio_settings = self.db.get_audio_metadata_settings(task_id)
+        merge_status = "🟢 مفعل" if audio_settings.get('audio_merge_enabled') else "🔴 معطل"
+        intro_path = audio_settings.get('intro_audio_path') or 'غير محدد'
+        outro_path = audio_settings.get('outro_audio_path') or 'غير محدد'
+        intro_position = 'البداية' if audio_settings.get('intro_position') == 'start' else 'النهاية'
+        buttons = [
+            [Button.inline("🎚️ تبديل حالة الدمج", f"toggle_audio_merge_{task_id}")],
+            [Button.inline("🎵 مقطع مقدمة", f"intro_audio_settings_{task_id}")],
+            [Button.inline("🎵 مقطع خاتمة", f"outro_audio_settings_{task_id}")],
+            [Button.inline("⚙️ خيارات الدمج", f"merge_options_{task_id}")],
+            [Button.inline("🔙 رجوع لإعدادات الوسوم الصوتية", f"audio_metadata_settings_{task_id}")]
+        ]
+        message_text = (
+            f"🔗 إعدادات دمج المقاطع الصوتية للمهمة: {task_name}\n\n"
+            f"📝 الوصف:\n"
+            f"• إضافة مقطع مقدمة في البداية\n"
+            f"• إضافة مقطع خاتمة في النهاية\n"
+            f"• اختيار موضع المقدمة (بداية أو نهاية)\n"
+            f"• دعم جميع الصيغ الصوتية\n"
+            f"• جودة عالية 320k MP3\n\n"
+            f"حالة الدمج: {merge_status}\n"
+            f"مقدمة: {intro_path}\n"
+            f"خاتمة: {outro_path}\n"
+            f"موضع المقدمة: {intro_position}\n\n"
+            f"اختر الإعداد الذي تريد تعديله:"
+        )
+        await self.edit_or_send_message(event, message_text, buttons=buttons)
 
     async def advanced_audio_settings(self, event, task_id):
-        return await globals()['advanced_audio_settings'](self, event, task_id)
+        user_id = event.sender_id
+        task = self.db.get_task(task_id, user_id)
+        if not task:
+            await event.answer("❌ المهمة غير موجودة")
+            return
+        task_name = task.get('task_name', 'مهمة بدون اسم')
+        audio_settings = self.db.get_audio_metadata_settings(task_id)
+        preserve_status = "🟢" if audio_settings.get('preserve_original') else "🔴"
+        convert_status = "🟢" if audio_settings.get('convert_to_mp3') else "🔴"
+        buttons = [
+            [Button.inline(f"{preserve_status} الحفاظ على الجودة", f"toggle_preserve_quality_{task_id}")],
+            [Button.inline(f"{convert_status} التحويل إلى MP3", f"toggle_convert_to_mp3_{task_id}")],
+            [Button.inline("🔙 رجوع لإعدادات الوسوم الصوتية", f"audio_metadata_settings_{task_id}")]
+        ]
+        message_text = (
+            f"⚙️ الإعدادات المتقدمة للوسوم الصوتية للمهمة: {task_name}\n\n"
+            f"📝 الوصف:\n"
+            f"• الحفاظ على الجودة الأصلية 100%\n"
+            f"• تحويل إلى MP3 مع الحفاظ على الدقة\n"
+            f"• معالجة مرة واحدة وإعادة الاستخدام\n"
+            f"• Cache ذكي للملفات المعالجة\n"
+            f"• إعدادات الأداء والسرعة\n\n"
+            f"اختر الإعداد الذي تريد تعديله:"
+        )
+        await self.edit_or_send_message(event, message_text, buttons=buttons)
 
     async def show_album_art_options(self, event, task_id: int):
-        return await globals()['show_album_art_options'](self, event, task_id)
+        settings = self.db.get_audio_metadata_settings(task_id)
+        art_status = "🟢 مفعل" if settings.get('album_art_enabled') else "🔴 معطل"
+        apply_all_status = "🟢 نعم" if settings.get('apply_art_to_all') else "🔴 لا"
+        buttons = [
+            [Button.inline(f"🔄 تبديل صورة الغلاف ({art_status})", f"toggle_album_art_enabled_{task_id}")],
+            [Button.inline(f"📦 تطبيق على جميع الملفات ({apply_all_status})", f"toggle_apply_art_to_all_{task_id}")],
+            [Button.inline("🔙 رجوع", f"album_art_settings_{task_id}")]
+        ]
+        await self.edit_or_send_message(event, "⚙️ خيارات صورة الغلاف:", buttons=buttons)
 
     async def show_intro_audio_settings(self, event, task_id: int):
-        return await globals()['show_intro_audio_settings'](self, event, task_id)
+        settings = self.db.get_audio_metadata_settings(task_id)
+        intro_path = settings.get('intro_audio_path') or 'غير محدد'
+        buttons = [
+            [Button.inline("⬆️ رفع مقدمة", f"upload_intro_audio_{task_id}")],
+            [Button.inline("🗑️ حذف المقدمة", f"remove_intro_audio_{task_id}")],
+            [Button.inline("🔙 رجوع", f"audio_merge_settings_{task_id}")]
+        ]
+        await self.edit_or_send_message(event, f"🎵 مقدمة حالية: {intro_path}", buttons=buttons)
 
     async def show_outro_audio_settings(self, event, task_id: int):
-        return await globals()['show_outro_audio_settings'](self, event, task_id)
+        settings = self.db.get_audio_metadata_settings(task_id)
+        outro_path = settings.get('outro_audio_path') or 'غير محدد'
+        buttons = [
+            [Button.inline("⬆️ رفع خاتمة", f"upload_outro_audio_{task_id}")],
+            [Button.inline("🗑️ حذف الخاتمة", f"remove_outro_audio_{task_id}")],
+            [Button.inline("🔙 رجوع", f"audio_merge_settings_{task_id}")]
+        ]
+        await self.edit_or_send_message(event, f"🎵 خاتمة حالية: {outro_path}", buttons=buttons)
 
     async def show_merge_options(self, event, task_id: int):
-        return await globals()['show_merge_options'](self, event, task_id)
+        settings = self.db.get_audio_metadata_settings(task_id)
+        pos = settings.get('intro_position', 'start')
+        pos_text = 'البداية' if pos == 'start' else 'النهاية'
+        buttons = [
+            [Button.inline("⬆️ المقدمة في البداية", f"set_intro_position_start_{task_id}")],
+            [Button.inline("⬇️ المقدمة في النهاية", f"set_intro_position_end_{task_id}")],
+            [Button.inline("🔙 رجوع", f"audio_merge_settings_{task_id}")]
+        ]
+        await self.edit_or_send_message(event, f"⚙️ موضع المقدمة الحالي: {pos_text}", buttons=buttons)
 
     async def handle_start(self, event):
         """Handle /start command"""
