@@ -76,7 +76,7 @@ class SimpleTelegramBot:
         try:
             tracked_msg = self.user_messages[user_id]
             # Check if message is not too old (5 minutes)
-            if time.time() - tracked_msg['timestamp'] < 300:
+            if time.time() - tracked_msg['timestamp'] < 300 and hasattr(self, 'bot') and self.bot:
                 await self.bot.edit_message(
                     tracked_msg['chat_id'],
                     tracked_msg['message_id'],
@@ -738,6 +738,26 @@ class SimpleTelegramBot:
                     self.db.set_album_art_settings(task_id, apply_to_all=not bool(settings.get('apply_art_to_all')))
                     await event.answer("✅ تم التبديل")
                     await self.album_art_settings(event, task_id)
+                except ValueError:
+                    await event.answer("❌ خطأ في تحليل البيانات")
+            elif data.startswith("toggle_preserve_quality_"):
+                try:
+                    task_id = int(data.replace("toggle_preserve_quality_", ""))
+                    settings = self.db.get_audio_metadata_settings(task_id)
+                    current_state = settings.get('preserve_quality', True)
+                    self.db.update_audio_metadata_setting(task_id, 'preserve_quality', not current_state)
+                    await event.answer("✅ تم التبديل")
+                    await self.advanced_audio_settings(event, task_id)
+                except ValueError:
+                    await event.answer("❌ خطأ في تحليل البيانات")
+            elif data.startswith("toggle_convert_to_mp3_"):
+                try:
+                    task_id = int(data.replace("toggle_convert_to_mp3_", ""))
+                    settings = self.db.get_audio_metadata_settings(task_id)
+                    current_state = settings.get('convert_to_mp3', False)
+                    self.db.update_audio_metadata_setting(task_id, 'convert_to_mp3', not current_state)
+                    await event.answer("✅ تم التبديل")
+                    await self.advanced_audio_settings(event, task_id)
                 except ValueError:
                     await event.answer("❌ خطأ في تحليل البيانات")
             elif data.startswith("audio_merge_settings_"):
@@ -1759,6 +1779,25 @@ class SimpleTelegramBot:
                     except ValueError as e:
                         logger.error(f"❌ خطأ في تحليل معرف المهمة لمسح الفلتر: {e}, data='{data}', parts={parts}")
                         await event.answer("❌ خطأ في تحليل البيانات")
+            elif data.startswith("confirm_clear_replacements_"): # Handler for confirming clear replacements
+                parts = data.split("_")
+                if len(parts) >= 4:
+                    try:
+                        task_id = int(parts[3])
+                        await self.clear_replacements_execute(event, task_id)
+                    except ValueError as e:
+                        logger.error(f"❌ خطأ في تحليل معرف المهمة لتأكيد حذف الاستبدالات: {e}, data='{data}', parts={parts}")
+                        await event.answer("❌ خطأ في تحليل البيانات")
+            elif data.startswith("confirm_clear_inline_buttons_"): # Handler for confirming clear inline buttons
+                parts = data.split("_")
+                if len(parts) >= 5:
+                    try:
+                        # Get the last part which should be the task_id
+                        task_id = int(parts[-1])
+                        await self.clear_inline_buttons_execute(event, task_id)
+                    except ValueError as e:
+                        logger.error(f"❌ خطأ في تحليل معرف المهمة لتأكيد حذف الأزرار: {e}, data='{data}', parts={parts}")
+                        await event.answer("❌ خطأ في تحليل البيانات")
             elif data.startswith("confirm_clear_"): # Handler for confirming filter clear
                 parts = data.split("_")
                 if len(parts) >= 4:
@@ -1894,15 +1933,6 @@ class SimpleTelegramBot:
                     except ValueError as e:
                         logger.error(f"❌ خطأ في تحليل معرف المهمة لحذف الاستبدالات: {e}, data='{data}', parts={parts}")
                         await event.answer("❌ خطأ في تحليل البيانات")
-            elif data.startswith("confirm_clear_replacements_"): # Handler for confirming clear replacements
-                parts = data.split("_")
-                if len(parts) >= 4:
-                    try:
-                        task_id = int(parts[3])
-                        await self.clear_replacements_execute(event, task_id)
-                    except ValueError as e:
-                        logger.error(f"❌ خطأ في تحليل معرف المهمة لتأكيد حذف الاستبدالات: {e}, data='{data}', parts={parts}")
-                        await event.answer("❌ خطأ في تحليل البيانات")
             elif data.startswith("header_settings_"): # Handler for header settings
                 parts = data.split("_")
                 if len(parts) >= 3:
@@ -2001,16 +2031,6 @@ class SimpleTelegramBot:
                         await self.clear_inline_buttons_confirm(event, task_id)
                     except ValueError as e:
                         logger.error(f"❌ خطأ في تحليل معرف المهمة لحذف الأزرار: {e}, data='{data}', parts={parts}")
-                        await event.answer("❌ خطأ في تحليل البيانات")
-            elif data.startswith("confirm_clear_inline_buttons_"): # Handler for confirming clear inline buttons
-                parts = data.split("_")
-                if len(parts) >= 5:
-                    try:
-                        # Get the last part which should be the task_id
-                        task_id = int(parts[-1])
-                        await self.clear_inline_buttons_execute(event, task_id)
-                    except ValueError as e:
-                        logger.error(f"❌ خطأ في تحليل معرف المهمة لتأكيد حذف الأزرار: {e}, data='{data}', parts={parts}")
                         await event.answer("❌ خطأ في تحليل البيانات")
             elif data.startswith("forwarding_settings_"): # Handler for forwarding settings
                 parts = data.split("_")
@@ -2804,8 +2824,10 @@ class SimpleTelegramBot:
 
     async def show_advanced_features(self, event, task_id):
         """Show advanced features menu"""
-        user_id = event.sender_id
-        task = self.db.get_task(task_id, user_id)
+        user_id = event.sender_id if hasattr(event, 'sender_id') else None
+        
+        # Try to get task with user_id first, then without if user_id is None
+        task = self.db.get_task(task_id, user_id) if user_id else self.db.get_task(task_id)
         
         if not task:
             await event.answer("❌ المهمة غير موجودة")
@@ -11931,9 +11953,20 @@ async def run_simple_bot():
         
         task_name = task.get('task_name', 'مهمة بدون اسم')
         
+        # Get current album art settings
+        audio_settings = self.db.get_audio_metadata_settings(task_id)
+        art_enabled = audio_settings.get('album_art_enabled', False)
+        apply_to_all = audio_settings.get('apply_art_to_all', False)
+        art_path = audio_settings.get('album_art_path', '')
+        
+        art_status = "🟢 مفعل" if art_enabled else "🔴 معطل"
+        apply_all_status = "🟢 نعم" if apply_to_all else "🔴 لا"
+        art_path_display = art_path if art_path else "غير محدد"
+        
         buttons = [
+            [Button.inline(f"🔄 تبديل الحالة ({art_status.split()[0]})", f"toggle_album_art_enabled_{task_id}")],
             [Button.inline("🖼️ رفع صورة غلاف", f"upload_album_art_{task_id}")],
-            [Button.inline("⚙️ خيارات التطبيق", f"album_art_options_{task_id}")],
+            [Button.inline(f"⚙️ تطبيق على الجميع ({apply_all_status.split()[0]})", f"toggle_apply_art_to_all_{task_id}")],
             [Button.inline("🔙 رجوع لإعدادات الوسوم الصوتية", f"audio_metadata_settings_{task_id}")]
         ]
         
@@ -11945,9 +11978,10 @@ async def run_simple_bot():
             f"• خيار تطبيقها فقط على الملفات بدون صورة\n"
             f"• الحفاظ على الجودة 100%\n"
             f"• دعم الصيغ: JPG, PNG, BMP, TIFF\n\n"
-            f"الحالة: {art_status}\n"
-            f"تطبيق على الجميع: {apply_all_status}\n"
-            f"المسار الحالي: {art_path}\n\n"
+            f"📊 الحالة الحالية:\n"
+            f"• الحالة: {art_status}\n"
+            f"• تطبيق على الجميع: {apply_all_status}\n"
+            f"• المسار الحالي: {art_path_display}\n\n"
             f"اختر الإعداد الذي تريد تعديله أو ارفع صورة جديدة:"
         )
         
@@ -11964,8 +11998,20 @@ async def run_simple_bot():
         
         task_name = task.get('task_name', 'مهمة بدون اسم')
         
+        # Get current audio merge settings
+        audio_settings = self.db.get_audio_metadata_settings(task_id)
+        merge_enabled = audio_settings.get('audio_merge_enabled', False)
+        intro_path = audio_settings.get('intro_path', '')
+        outro_path = audio_settings.get('outro_path', '')
+        intro_position = audio_settings.get('intro_position', 'start')
+        
+        merge_status = "🟢 مفعل" if merge_enabled else "🔴 معطل"
+        intro_path_display = intro_path if intro_path else "غير محدد"
+        outro_path_display = outro_path if outro_path else "غير محدد"
+        intro_position_display = "البداية" if intro_position == 'start' else "النهاية"
+        
         buttons = [
-            [Button.inline("🎚️ تبديل حالة الدمج", f"toggle_audio_merge_{task_id}")],
+            [Button.inline(f"🎚️ تبديل حالة الدمج ({merge_status.split()[0]})", f"toggle_audio_merge_{task_id}")],
             [Button.inline("🎵 مقطع مقدمة", f"intro_audio_settings_{task_id}")],
             [Button.inline("🎵 مقطع خاتمة", f"outro_audio_settings_{task_id}")],
             [Button.inline("⚙️ خيارات الدمج", f"merge_options_{task_id}")],
@@ -11980,10 +12026,11 @@ async def run_simple_bot():
             f"• اختيار موضع المقدمة (بداية أو نهاية)\n"
             f"• دعم جميع الصيغ الصوتية\n"
             f"• جودة عالية 320k MP3\n\n"
-            f"حالة الدمج: {merge_status}\n"
-            f"مقدمة: {intro_path}\n"
-            f"خاتمة: {outro_path}\n"
-            f"موضع المقدمة: {intro_position}\n\n"
+            f"📊 الحالة الحالية:\n"
+            f"• حالة الدمج: {merge_status}\n"
+            f"• مقدمة: {intro_path_display}\n"
+            f"• خاتمة: {outro_path_display}\n"
+            f"• موضع المقدمة: {intro_position_display}\n\n"
             f"اختر الإعداد الذي تريد تعديله:"
         )
         
@@ -12000,6 +12047,14 @@ async def run_simple_bot():
         
         task_name = task.get('task_name', 'مهمة بدون اسم')
         
+        # Get current advanced settings
+        audio_settings = self.db.get_audio_metadata_settings(task_id)
+        preserve_quality = audio_settings.get('preserve_quality', True)
+        convert_to_mp3 = audio_settings.get('convert_to_mp3', False)
+        
+        preserve_status = "🟢" if preserve_quality else "🔴"
+        convert_status = "🟢" if convert_to_mp3 else "🔴"
+        
         buttons = [
             [Button.inline(f"{preserve_status} الحفاظ على الجودة", f"toggle_preserve_quality_{task_id}")],
             [Button.inline(f"{convert_status} التحويل إلى MP3", f"toggle_convert_to_mp3_{task_id}")],
@@ -12014,6 +12069,9 @@ async def run_simple_bot():
             f"• معالجة مرة واحدة وإعادة الاستخدام\n"
             f"• Cache ذكي للملفات المعالجة\n"
             f"• إعدادات الأداء والسرعة\n\n"
+            f"📊 الحالة الحالية:\n"
+            f"• الحفاظ على الجودة: {preserve_status} {'مفعل' if preserve_quality else 'معطل'}\n"
+            f"• التحويل إلى MP3: {convert_status} {'مفعل' if convert_to_mp3 else 'معطل'}\n\n"
             f"اختر الإعداد الذي تريد تعديله:"
         )
         

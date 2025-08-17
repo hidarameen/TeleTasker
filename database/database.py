@@ -1006,15 +1006,15 @@ class Database:
             row = cursor.fetchone()
             if row:
                 return {
-                    'id': row['id'],
-                    'task_name': row['task_name'],
-                    'source_chat_id': row['source_chat_id'],
-                    'source_chat_name': row['source_chat_name'],
-                    'target_chat_id': row['target_chat_id'],
-                    'target_chat_name': row['target_chat_name'],
-                    'forward_mode': row['forward_mode'] or 'forward',
-                    'is_active': bool(row['is_active']),
-                    'created_at': str(row['created_at'])
+                    'id': row[0],
+                    'task_name': row[1],
+                    'source_chat_id': row[2],
+                    'source_chat_name': row[3],
+                    'target_chat_id': row[4],
+                    'target_chat_name': row[5],
+                    'forward_mode': row[6] or 'forward',
+                    'is_active': bool(row[7]),
+                    'created_at': str(row[8])
                 }
             return None
 
@@ -1050,7 +1050,7 @@ class Database:
 
             tasks = []
             for row in cursor.fetchall():
-                task_id = row['id']
+                task_id = row[0]
 
                 # Get all sources for this task
                 sources = self.get_task_sources(task_id)
@@ -1058,9 +1058,9 @@ class Database:
                     # Fallback to legacy data
                     sources = [{
                         'id': 0,
-                        'chat_id': row['source_chat_id'],
-                        'chat_name': row['source_chat_name']
-                    }] if row['source_chat_id'] else []
+                        'chat_id': row[1],
+                        'chat_name': row[2]
+                    }] if row[1] else []
 
                 # Get all targets for this task  
                 targets = self.get_task_targets(task_id)
@@ -1068,21 +1068,21 @@ class Database:
                     # Fallback to legacy data
                     targets = [{
                         'id': 0,
-                        'chat_id': row['target_chat_id'],
-                        'chat_name': row['target_chat_name']
-                    }] if row['target_chat_id'] else []
+                        'chat_id': row[3],
+                        'chat_name': row[4]
+                    }] if row[3] else []
 
                 # Create individual task entries for each source-target combination
                 for source in sources:
                     for target in targets:
                         tasks.append({
-                            'id': row['id'],
-                            'task_name': row['task_name'],
+                            'id': row[0],
+                            'task_name': row[1],
                             'source_chat_id': source['chat_id'],
                             'source_chat_name': source['chat_name'],
                             'target_chat_id': target['chat_id'],
                             'target_chat_name': target['chat_name'],
-                            'forward_mode': row['forward_mode'] or 'forward'
+                            'forward_mode': row[5] or 'forward'
                         })
             return tasks
     
@@ -1886,13 +1886,13 @@ class Database:
                     conn.commit()
                     inline_buttons_enabled = False
                 else:
-                    inline_buttons_enabled = bool(settings_result['inline_buttons_enabled'])
+                    inline_buttons_enabled = bool(settings_result[0])
 
                 return {
-                    'header_enabled': header_result['enabled'] if header_result else False,
-                    'header_text': header_result['header_text'] if header_result else None,
-                    'footer_enabled': footer_result['enabled'] if footer_result else False,
-                    'footer_text': footer_result['footer_text'] if footer_result else None,
+                    'header_enabled': header_result[0] if header_result else False,
+                    'header_text': header_result[1] if header_result else None,
+                    'footer_enabled': footer_result[0] if footer_result else False,
+                    'footer_text': footer_result[1] if footer_result else None,
                     'inline_buttons_enabled': inline_buttons_enabled
                 }
         except Exception as e:
@@ -2666,7 +2666,7 @@ class Database:
             result = cursor.fetchone()
             
             if result:
-                new_state = not bool(result['enabled'])
+                new_state = not bool(result[0])
             else:
                 new_state = True
             
@@ -3821,10 +3821,10 @@ class Database:
             result = cursor.fetchone()
             if result:
                 return {
-                    'enabled': bool(result['enabled']),
-                    'action_type': result['action_type'],
-                    'min_chars': result['min_chars'],
-                    'max_chars': result['max_chars']
+                    'enabled': bool(result[0]),
+                    'action_type': result[1],
+                    'min_chars': result[2],
+                    'max_chars': result[3]
                 }
             return {
                 'enabled': False,
@@ -3903,9 +3903,9 @@ class Database:
             result = cursor.fetchone()
             if result:
                 return {
-                    'enabled': bool(result['enabled']),
-                    'message_count': result['message_count'],
-                    'time_period_seconds': result['time_period_seconds']
+                    'enabled': bool(result[0]),
+                    'message_count': result[1],
+                    'time_period_seconds': result[2]
                 }
             return {
                 'enabled': False,
@@ -4037,8 +4037,8 @@ class Database:
             result = cursor.fetchone()
             if result:
                 return {
-                    'enabled': bool(result['enabled']),
-                    'delay_seconds': result['delay_seconds']
+                    'enabled': bool(result[0]),
+                    'delay_seconds': result[1]
                 }
             return {
                 'enabled': False,
@@ -4114,8 +4114,8 @@ class Database:
             result = cursor.fetchone()
             if result:
                 return {
-                    'enabled': bool(result['enabled']),
-                    'interval_seconds': result['interval_seconds']
+                    'enabled': bool(result[0]),
+                    'interval_seconds': result[1]
                 }
             return {
                 'enabled': False,
@@ -5334,6 +5334,79 @@ class Database:
                   new_values['preserve_original'], new_values['convert_to_mp3']))
             conn.commit()
             return True
+
+    def set_audio_quality_settings(self, task_id: int, preserve_original: Optional[bool] = None, convert_to_mp3: Optional[bool] = None) -> bool:
+        """Update audio quality/format settings for a task"""
+        current = self.get_audio_metadata_settings(task_id)
+        new_values = {
+            'enabled': current['enabled'],
+            'template': current['template'],
+            'album_art_enabled': current['album_art_enabled'],
+            'album_art_path': current['album_art_path'],
+            'apply_art_to_all': current['apply_art_to_all'],
+            'audio_merge_enabled': current['audio_merge_enabled'],
+            'intro_audio_path': current['intro_audio_path'],
+            'outro_audio_path': current['outro_audio_path'],
+            'intro_position': current['intro_position'],
+            'preserve_original': current['preserve_original'] if preserve_original is None else bool(preserve_original),
+            'convert_to_mp3': current['convert_to_mp3'] if convert_to_mp3 is None else bool(convert_to_mp3)
+        }
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT OR REPLACE INTO task_audio_metadata_settings (
+                    task_id, enabled, template, album_art_enabled, album_art_path, apply_art_to_all,
+                    audio_merge_enabled, intro_audio_path, outro_audio_path, intro_position,
+                    preserve_original, convert_to_mp3, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ''', (task_id, new_values['enabled'], new_values['template'], new_values['album_art_enabled'],
+                  new_values['album_art_path'], new_values['apply_art_to_all'], new_values['audio_merge_enabled'],
+                  new_values['intro_audio_path'], new_values['outro_audio_path'], new_values['intro_position'],
+                  new_values['preserve_original'], new_values['convert_to_mp3']))
+            conn.commit()
+            return True
+
+    def update_audio_metadata_setting(self, task_id: int, setting_name: str, value) -> bool:
+        """Update a specific audio metadata setting for a task"""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                # Get current settings
+                current = self.get_audio_metadata_settings(task_id)
+                
+                # Update the specific setting
+                current[setting_name] = value
+                
+                # Insert or replace with updated values
+                cursor.execute('''
+                    INSERT OR REPLACE INTO task_audio_metadata_settings (
+                        task_id, enabled, template, album_art_enabled, album_art_path, apply_art_to_all,
+                        audio_merge_enabled, intro_audio_path, outro_audio_path, intro_position,
+                        preserve_original, convert_to_mp3, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                ''', (
+                    task_id, 
+                    current.get('enabled', False),
+                    current.get('template', 'default'),
+                    current.get('album_art_enabled', False),
+                    current.get('album_art_path', ''),
+                    current.get('apply_art_to_all', False),
+                    current.get('audio_merge_enabled', False),
+                    current.get('intro_audio_path', ''),
+                    current.get('outro_audio_path', ''),
+                    current.get('intro_position', 'start'),
+                    current.get('preserve_original', True),
+                    current.get('convert_to_mp3', False)
+                ))
+                
+                conn.commit()
+                logger.info(f"✅ تم تحديث إعداد الوسوم الصوتية '{setting_name}' للمهمة {task_id}: {value}")
+                return True
+                
+        except Exception as e:
+            logger.error(f"❌ خطأ في تحديث إعداد الوسوم الصوتية '{setting_name}' للمهمة {task_id}: {e}")
+            return False
 
     def set_audio_quality_settings(self, task_id: int, preserve_original: Optional[bool] = None, convert_to_mp3: Optional[bool] = None) -> bool:
         """Update audio quality/format settings for a task"""

@@ -778,13 +778,13 @@ class Database:
                     SELECT COUNT(*) as count FROM task_inline_buttons 
                     WHERE task_id = ?
                 ''', (task_id,))
-                buttons_count = cursor.fetchone()['count']
+                buttons_count = cursor.fetchone()[0]
                 
                 return {
-                    'header_enabled': header_result['enabled'] if header_result else False,
-                    'header_text': header_result['header_text'] if header_result else None,
-                    'footer_enabled': footer_result['enabled'] if footer_result else False,
-                    'footer_text': footer_result['footer_text'] if footer_result else None,
+                    'header_enabled': header_result[0] if header_result else False,
+                    'header_text': header_result[1] if header_result else None,
+                    'footer_enabled': footer_result[0] if footer_result else False,
+                    'footer_text': footer_result[1] if footer_result else None,
                     'inline_buttons_enabled': buttons_count > 0
                 }
         except Exception as e:
