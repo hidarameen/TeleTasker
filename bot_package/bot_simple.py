@@ -2804,8 +2804,10 @@ class SimpleTelegramBot:
 
     async def show_advanced_features(self, event, task_id):
         """Show advanced features menu"""
-        user_id = event.sender_id
-        task = self.db.get_task(task_id, user_id)
+        user_id = event.sender_id if hasattr(event, 'sender_id') else None
+        
+        # Try to get task with user_id first, then without if user_id is None
+        task = self.db.get_task(task_id, user_id) if user_id else self.db.get_task(task_id)
         
         if not task:
             await event.answer("❌ المهمة غير موجودة")
