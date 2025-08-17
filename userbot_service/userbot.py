@@ -2198,53 +2198,53 @@ class UserbotService:
 
             message_length = len(message_text)
             min_chars = settings.get('min_chars', 0)
-            max_chars = settings.get('max_chars', 0)
-            action_type = settings.get('action_type', 'max_limit')
+            max_chars = settings.get('max_chars', 4000)
+            mode = settings.get('mode', 'allow')
+            use_range = settings.get('use_range', True)
 
-            logger.info(f"📏 فحص حد الأحرف للمهمة {task_id}: النص='{message_text[:50]}...' ({message_length} حرف), حد أدنى={min_chars}, حد أقصى={max_chars}, نوع={action_type}")
+            logger.info(f"📏 فحص حد الأحرف للمهمة {task_id}: النص='{message_text[:50]}...' ({message_length} حرف), حد أدنى={min_chars}, حد أقصى={max_chars}, وضع={mode}")
 
-            # Character limit checking logic based on action_type
-            if action_type == 'min_limit':
-                # Minimum limit only: Allow messages >= min_chars, block messages < min_chars
-                if min_chars > 0:
-                    if message_length >= min_chars:
-                        logger.info(f"✅ الحد الأدنى: الرسالة مقبولة ({message_length} >= {min_chars} حرف)")
-                        return True
-                    else:
-                        logger.info(f"🚫 الحد الأدنى: الرسالة مرفوضة ({message_length} < {min_chars} حرف)")
-                        return False
-                else:
-                    logger.info(f"⚠️ الحد الأدنى غير محدد - السماح بجميع الرسائل")
-                    return True
-
-            elif action_type == 'max_limit':
-                # Maximum limit only: Allow messages <= max_chars, block messages > max_chars
-                if max_chars > 0:
-                    if message_length <= max_chars:
-                        logger.info(f"✅ الحد الأقصى: الرسالة مقبولة ({message_length} <= {max_chars} حرف)")
-                        return True
-                    else:
-                        logger.info(f"🚫 الحد الأقصى: الرسالة مرفوضة ({message_length} > {max_chars} حرف)")
-                        return False
-                else:
-                    logger.info(f"⚠️ الحد الأقصى غير محدد - السماح بجميع الرسائل")
-                    return True
-
-            elif action_type == 'range':
-                # Range limit: Allow messages within min_chars <= length <= max_chars
-                if min_chars > 0 and max_chars > 0:
+            # Character limit checking logic based on mode
+            if mode == 'allow':
+                # Allow mode: Allow messages that meet the criteria
+                if use_range and min_chars > 0 and max_chars > 0:
+                    # Range check: min_chars <= length <= max_chars
                     if min_chars <= message_length <= max_chars:
-                        logger.info(f"✅ النطاق: الرسالة مقبولة ({min_chars} <= {message_length} <= {max_chars} حرف)")
+                        logger.info(f"✅ السماح - النطاق: الرسالة مقبولة ({min_chars} <= {message_length} <= {max_chars} حرف)")
                         return True
                     else:
-                        logger.info(f"🚫 النطاق: الرسالة مرفوضة ({message_length} خارج النطاق {min_chars}-{max_chars} حرف)")
+                        logger.info(f"🚫 السماح - النطاق: الرسالة مرفوضة ({message_length} خارج النطاق {min_chars}-{max_chars} حرف)")
                         return False
                 else:
-                    logger.info(f"⚠️ نطاق غير محدد بشكل صحيح - السماح بجميع الرسائل")
-                    return True
+                    # Max limit only: length <= max_chars
+                    if message_length <= max_chars:
+                        logger.info(f"✅ السماح - الحد الأقصى: الرسالة مقبولة ({message_length} <= {max_chars} حرف)")
+                        return True
+                    else:
+                        logger.info(f"🚫 السماح - الحد الأقصى: الرسالة مرفوضة ({message_length} > {max_chars} حرف)")
+                        return False
+
+            elif mode == 'block':
+                # Block mode: Block messages that don't meet the criteria
+                if use_range and min_chars > 0 and max_chars > 0:
+                    # Range check: block if outside min_chars <= length <= max_chars
+                    if min_chars <= message_length <= max_chars:
+                        logger.info(f"✅ الحظر - النطاق: الرسالة مقبولة ({min_chars} <= {message_length} <= {max_chars} حرف)")
+                        return True
+                    else:
+                        logger.info(f"🚫 الحظر - النطاق: الرسالة مرفوضة ({message_length} خارج النطاق {min_chars}-{max_chars} حرف)")
+                        return False
+                else:
+                    # Max limit only: block if length > max_chars
+                    if message_length <= max_chars:
+                        logger.info(f"✅ الحظر - الحد الأقصى: الرسالة مقبولة ({message_length} <= {max_chars} حرف)")
+                        return True
+                    else:
+                        logger.info(f"🚫 الحظر - الحد الأقصى: الرسالة مرفوضة ({message_length} > {max_chars} حرف)")
+                        return False
             
             else:
-                logger.warning(f"⚠️ نوع فلتر غير معروف '{action_type}' - السماح بالتوجيه")
+                logger.warning(f"⚠️ وضع فلتر غير معروف '{mode}' - السماح بالتوجيه")
                 return True
 
         except Exception as e:

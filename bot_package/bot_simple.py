@@ -9838,44 +9838,35 @@ class SimpleTelegramBot:
         
         # Mode display
         mode_map = {
-            'max_limit': '🔺 حد أقصى',
-            'min_limit': '🔻 حد أدنى', 
-            'range': '📊 نطاق محدد'
+            'allow': '✅ السماح',
+            'block': '❌ الحظر'
         }
-        current_mode = settings['action_type']
+        current_mode = settings['mode']
         mode_text = mode_map.get(current_mode, current_mode)
         
-        # Values display based on mode
-        if current_mode == 'max_limit':
-            values_text = f"الحد الأقصى: {settings['max_chars']} حرف"
-        elif current_mode == 'min_limit':
-            values_text = f"الحد الأدنى: {settings['min_chars']} حرف"
-        else:  # range
+        # Values display
+        if settings.get('use_range', True):
             values_text = f"من {settings['min_chars']} إلى {settings['max_chars']} حرف"
+        else:
+            values_text = f"الحد الأقصى: {settings['max_chars']} حرف"
         
         buttons = [
             [Button.inline(f"🔄 تبديل الحالة ({status_text})", f"toggle_char_limit_{task_id}")],
             [Button.inline(f"⚙️ تغيير الوضع ({mode_text})", f"cycle_char_mode_{task_id}")],
         ]
         
-        # Add edit buttons based on current mode
-        if current_mode == 'max_limit':
-            buttons.append([Button.inline(f"✏️ تعديل الحد الأقصى", f"edit_char_max_{task_id}")])
-        elif current_mode == 'min_limit':
-            buttons.append([Button.inline(f"✏️ تعديل الحد الأدنى", f"edit_char_min_{task_id}")])
-        else:  # range
-            buttons.extend([
-                [Button.inline(f"✏️ تعديل الحد الأدنى", f"edit_char_min_{task_id}"),
-                 Button.inline(f"✏️ تعديل الحد الأقصى", f"edit_char_max_{task_id}")],
-            ])
+        # Add edit buttons
+        buttons.extend([
+            [Button.inline(f"✏️ تعديل الحد الأدنى", f"edit_char_min_{task_id}"),
+             Button.inline(f"✏️ تعديل الحد الأقصى", f"edit_char_max_{task_id}")],
+        ])
         
         buttons.append([Button.inline("🔙 رجوع للمميزات المتقدمة", f"advanced_features_{task_id}")])
         
         # Mode descriptions
         mode_descriptions = {
-            'max_limit': 'يسمح بالرسائل التي لا تتجاوز الحد الأقصى المحدد',
-            'min_limit': 'يسمح بالرسائل التي تتجاوز الحد الأدنى المحدد',
-            'range': 'يسمح بالرسائل ضمن النطاق المحدد (بين الحد الأدنى والأقصى)'
+            'allow': 'يسمح بالرسائل التي تلتزم بحدود الأحرف المحددة',
+            'block': 'يحظر الرسائل التي لا تلتزم بحدود الأحرف المحددة'
         }
         
         message_text = (
@@ -9886,9 +9877,8 @@ class SimpleTelegramBot:
             f"📝 الوصف:\n"
             f"{mode_descriptions.get(current_mode, 'وضع غير محدد')}\n\n"
             f"💡 الأوضاع المتاحة:\n"
-            f"🔺 حد أقصى: رسائل ≤ {settings['max_chars']} حرف\n"
-            f"🔻 حد أدنى: رسائل ≥ {settings['min_chars']} حرف\n"
-            f"📊 نطاق: رسائل بين {settings['min_chars']}-{settings['max_chars']} حرف"
+            f"✅ السماح: يسمح بالرسائل المطابقة للشروط\n"
+            f"❌ الحظر: يحظر الرسائل غير المطابقة للشروط"
         )
         
         await self.edit_or_send_message(event, message_text, buttons=buttons)
@@ -9925,9 +9915,8 @@ class SimpleTelegramBot:
         new_mode = self.db.cycle_character_limit_mode(task_id)
         
         mode_names = {
-            'max_limit': '🔺 حد أقصى',
-            'min_limit': '🔻 حد أدنى',
-            'range': '📊 نطاق محدد'
+            'allow': '✅ السماح',
+            'block': '❌ الحظر'
         }
         
         await event.answer(f"✅ تم تغيير الوضع إلى: {mode_names.get(new_mode, new_mode)}")

@@ -725,6 +725,9 @@ class Database:
         
         # Add language filter mode support
         self.add_language_filter_mode_support()
+        
+        # Update character limit table structure
+        self.update_character_limit_table()
 
     # User Session Management
     def save_user_session(self, user_id: int, phone_number: str, session_string: str):
@@ -3814,7 +3817,7 @@ class Database:
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                SELECT enabled, action_type, min_chars, max_chars
+                SELECT enabled, mode, min_chars, max_chars, use_range
                 FROM task_character_limit_settings 
                 WHERE task_id = ?
             ''', (task_id,))
@@ -3822,15 +3825,17 @@ class Database:
             if result:
                 return {
                     'enabled': bool(result[0]),
-                    'action_type': result[1],
+                    'mode': result[1],
                     'min_chars': result[2],
-                    'max_chars': result[3]
+                    'max_chars': result[3],
+                    'use_range': bool(result[4])
                 }
             return {
                 'enabled': False,
-                'action_type': 'max_limit',
-                'min_chars': 10,
-                'max_chars': 1000
+                'mode': 'allow',
+                'min_chars': 0,
+                'max_chars': 4000,
+                'use_range': True
             }
 
     def update_character_limit_settings(self, task_id: int, **kwargs) -> bool:
@@ -3845,15 +3850,15 @@ class Database:
                     # Create default settings if not exists
                     cursor.execute('''
                         INSERT INTO task_character_limit_settings 
-                        (task_id, enabled, action_type, min_chars, max_chars)
-                        VALUES (?, FALSE, 'max_limit', 10, 1000)
+                        (task_id, enabled, mode, min_chars, max_chars, use_range)
+                        VALUES (?, FALSE, 'allow', 0, 4000, TRUE)
                     ''', (task_id,))
                 
                 updates = []
                 params = []
                 
                 for key, value in kwargs.items():
-                    if key in ['enabled', 'action_type', 'min_chars', 'max_chars']:
+                    if key in ['enabled', 'mode', 'min_chars', 'max_chars', 'use_range']:
                         updates.append(f"{key} = ?")
                         params.append(value)
                 
@@ -4331,52 +4336,32 @@ class Database:
             return False
 
     def cycle_character_limit_mode(self, task_id: int) -> str:
-        """Cycle character limit mode between max_limit, min_limit, and range"""
+        """Cycle character limit mode between allow and block"""
         try:
             settings = self.get_character_limit_settings(task_id)
-            current_mode = settings['action_type']
+            current_mode = settings['mode']
             
             # Cycle through modes
-            if current_mode == 'max_limit':
-                new_mode = 'min_limit'
-            elif current_mode == 'min_limit':
-                new_mode = 'range'
-            else:  # range
-                new_mode = 'max_limit'
+            if current_mode == 'allow':
+                new_mode = 'block'
+            else:  # block
+                new_mode = 'allow'
             
-            self.update_character_limit_settings(task_id, action_type=new_mode)
+            self.update_character_limit_settings(task_id, mode=new_mode)
             return new_mode
         except Exception as e:
             logger.error(f"خطأ في تدوير وضع حد الأحرف: {e}")
-            return 'max_limit'
+            return 'allow'
 
     def update_character_limit_values(self, task_id: int, min_chars: int = None, max_chars: int = None) -> bool:
-        """Update character limit min/max values and determine correct action_type"""
+        """Update character limit min/max values"""
         try:
-            # Get current settings to determine the right action_type
-            current_settings = self.get_character_limit_settings(task_id)
-            current_min = current_settings.get('min_chars', 0)
-            current_max = current_settings.get('max_chars', 0)
-            
             # Update the values
             updates = {}
             if min_chars is not None:
                 updates['min_chars'] = min_chars
-                current_min = min_chars
             if max_chars is not None:
-                updates['max_chars'] = max_chars  
-                current_max = max_chars
-            
-            # Determine the correct action_type based on final values
-            if current_min > 0 and current_max > 0:
-                updates['action_type'] = 'range'
-            elif current_min > 0 and current_max == 0:
-                updates['action_type'] = 'min_limit'
-            elif current_max > 0 and current_min == 0:
-                updates['action_type'] = 'max_limit'
-            else:
-                # Both are 0 or not set - default to max_limit
-                updates['action_type'] = 'max_limit'
+                updates['max_chars'] = max_chars
             
             if updates:
                 return self.update_character_limit_settings(task_id, **updates)
@@ -4409,8 +4394,8 @@ class Database:
                     new_enabled = True
                     cursor.execute('''
                         INSERT INTO task_character_limit_settings 
-                        (task_id, enabled, action_type, min_chars, max_chars)
-                        VALUES (?, ?, 'max_limit', 10, 1000)
+                        (task_id, enabled, mode, min_chars, max_chars, use_range)
+                        VALUES (?, ?, 'allow', 0, 4000, TRUE)
                     ''', (task_id, new_enabled))
                 
                 conn.commit()
@@ -4706,36 +4691,69 @@ class Database:
             return None
 
     def add_duplicate_filter_columns(self):
-        """Add missing duplicate filter columns to task_advanced_filters table"""
+        """Add missing duplicate filter columns if they don't exist"""
         try:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
                 
-                # Check if columns exist first
-                cursor.execute("PRAGMA table_info(task_advanced_filters)")
-                columns = [row[1] for row in cursor.fetchall()]
+                # Check if columns exist and add them if they don't
+                columns_to_add = [
+                    ('task_duplicate_settings', 'check_media_duplicates', 'BOOLEAN DEFAULT FALSE'),
+                    ('task_duplicate_settings', 'check_text_duplicates', 'BOOLEAN DEFAULT FALSE'),
+                    ('task_duplicate_settings', 'check_forward_duplicates', 'BOOLEAN DEFAULT FALSE'),
+                    ('task_duplicate_settings', 'duplicate_time_window', 'INTEGER DEFAULT 3600'),
+                    ('task_duplicate_settings', 'ignore_case', 'BOOLEAN DEFAULT TRUE'),
+                    ('task_duplicate_settings', 'ignore_whitespace', 'BOOLEAN DEFAULT TRUE'),
+                    ('task_duplicate_settings', 'check_similarity', 'BOOLEAN DEFAULT FALSE'),
+                    ('task_duplicate_settings', 'similarity_threshold', 'REAL DEFAULT 0.8')
+                ]
                 
-                # Add duplicate_filter_similarity_threshold if not exists
-                if 'duplicate_filter_similarity_threshold' not in columns:
-                    cursor.execute('''
-                        ALTER TABLE task_advanced_filters 
-                        ADD COLUMN duplicate_filter_similarity_threshold REAL DEFAULT 0.85
-                    ''')
-                    logger.info("✅ تم إضافة عمود duplicate_filter_similarity_threshold")
-                
-                # Add duplicate_filter_time_window_hours if not exists
-                if 'duplicate_filter_time_window_hours' not in columns:
-                    cursor.execute('''
-                        ALTER TABLE task_advanced_filters 
-                        ADD COLUMN duplicate_filter_time_window_hours INTEGER DEFAULT 24
-                    ''')
-                    logger.info("✅ تم إضافة عمود duplicate_filter_time_window_hours")
+                for table, column, definition in columns_to_add:
+                    try:
+                        cursor.execute(f'ALTER TABLE {table} ADD COLUMN {column} {definition}')
+                        logger.info(f"✅ تم إضافة العمود {column} إلى الجدول {table}")
+                    except Exception as e:
+                        if "duplicate column name" in str(e).lower():
+                            logger.debug(f"العمود {column} موجود بالفعل في الجدول {table}")
+                        else:
+                            logger.warning(f"⚠️ خطأ في إضافة العمود {column}: {e}")
                 
                 conn.commit()
-                logger.info("✅ تم التحقق من وإضافة أعمدة فلتر التكرار")
                 
         except Exception as e:
-            logger.error(f"خطأ في إضافة أعمدة فلتر التكرار: {e}")
+            logger.error(f"خطأ في إضافة أعمدة الفلاتر المكررة: {e}")
+
+    def update_character_limit_table(self):
+        """Update character limit table structure if needed"""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                # Check if mode column exists
+                cursor.execute("PRAGMA table_info(task_character_limit_settings)")
+                columns = [column[1] for column in cursor.fetchall()]
+                
+                # Add missing columns
+                if 'mode' not in columns:
+                    cursor.execute('ALTER TABLE task_character_limit_settings ADD COLUMN mode TEXT DEFAULT "allow" CHECK (mode IN ("allow", "block"))')
+                    logger.info("✅ تم إضافة عمود mode إلى جدول task_character_limit_settings")
+                
+                if 'use_range' not in columns:
+                    cursor.execute('ALTER TABLE task_character_limit_settings ADD COLUMN use_range BOOLEAN DEFAULT TRUE')
+                    logger.info("✅ تم إضافة عمود use_range إلى جدول task_character_limit_settings")
+                
+                # Update existing records to use new structure
+                cursor.execute('''
+                    UPDATE task_character_limit_settings 
+                    SET mode = 'allow', use_range = TRUE 
+                    WHERE mode IS NULL OR use_range IS NULL
+                ''')
+                
+                conn.commit()
+                logger.info("✅ تم تحديث بنية جدول حد الأحرف بنجاح")
+                
+        except Exception as e:
+            logger.error(f"خطأ في تحديث بنية جدول حد الأحرف: {e}")
 
     def add_language_filter_mode_support(self):
         """Add language filter mode support to task_advanced_filters table"""
