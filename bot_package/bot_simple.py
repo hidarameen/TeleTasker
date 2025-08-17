@@ -753,7 +753,7 @@ class SimpleTelegramBot:
                 try:
                     task_id = int(data.replace("upload_album_art_", ""))
                     self.set_user_state(user_id, 'awaiting_album_art_upload', {'task_id': task_id})
-                    await self.edit_or_send_message(event, "🖼️ أرسل الآن صورة الغلاف كصورة أو ملف.")
+                    await self.force_new_message(event, "🖼️ أرسل الآن صورة الغلاف كصورة أو ملف.")
                 except ValueError:
                     await event.answer("❌ خطأ في تحليل البيانات")
             elif data.startswith("toggle_album_art_enabled_"):
@@ -844,7 +844,7 @@ class SimpleTelegramBot:
                 try:
                     task_id = int(data.replace("upload_intro_audio_", ""))
                     self.set_user_state(user_id, 'awaiting_intro_audio_upload', {'task_id': task_id})
-                    await self.edit_or_send_message(event, "🎵 أرسل الآن ملف المقدمة (Audio)")
+                    await self.force_new_message(event, "🎵 أرسل الآن ملف المقدمة (Audio)")
                 except ValueError:
                     await event.answer("❌ خطأ في تحليل البيانات")
             elif data.startswith("remove_intro_audio_"):
@@ -859,7 +859,7 @@ class SimpleTelegramBot:
                 try:
                     task_id = int(data.replace("upload_outro_audio_", ""))
                     self.set_user_state(user_id, 'awaiting_outro_audio_upload', {'task_id': task_id})
-                    await self.edit_or_send_message(event, "🎵 أرسل الآن ملف الخاتمة (Audio)")
+                    await self.force_new_message(event, "🎵 أرسل الآن ملف الخاتمة (Audio)")
                 except ValueError:
                     await event.answer("❌ خطأ في تحليل البيانات")
             elif data.startswith("remove_outro_audio_"):
@@ -2915,7 +2915,7 @@ class SimpleTelegramBot:
             f"اختر الميزة التي تريد إدارتها:"
         )
         
-        await self.force_new_message(event, message_text, buttons=buttons)
+        await self.edit_or_send_message(event, message_text, buttons=buttons)
 
     async def handle_message(self, event):
         """Handle text messages"""
@@ -3456,7 +3456,7 @@ class SimpleTelegramBot:
             f"اختر الإعداد الذي تريد تعديله:"
         )
         
-        await self.force_new_message(event, message_text, buttons=buttons)
+        await self.edit_or_send_message(event, message_text, buttons=buttons)
 
     async def toggle_forward_mode(self, event, task_id):
         """Toggle forward mode between copy and forward"""
@@ -4604,7 +4604,7 @@ class SimpleTelegramBot:
             f"اختر إجراء:"
         )
         
-        await self.force_new_message(event, message_text, buttons=buttons)
+        await self.edit_or_send_message(event, message_text, buttons=buttons)
 
     async def start_create_task(self, event):
         """Start creating new task"""
@@ -9904,7 +9904,7 @@ class SimpleTelegramBot:
             f"❌ الحظر: يحظر الرسائل غير المطابقة للشروط"
         )
         
-        await self.force_new_message(event, message_text, buttons=buttons)
+        await self.edit_or_send_message(event, message_text, buttons=buttons)
 
     async def toggle_character_limit(self, event, task_id):
         """Toggle character limit on/off"""
@@ -10038,7 +10038,7 @@ class SimpleTelegramBot:
             f"يحدد هذا الإعداد عدد الرسائل المسموح بإرسالها خلال فترة زمنية محددة"
         )
         
-        await self.force_new_message(event, message_text, buttons=buttons)
+        await self.edit_or_send_message(event, message_text, buttons=buttons)
 
     async def show_forwarding_delay_settings(self, event, task_id):
         """Show forwarding delay settings"""
@@ -10078,7 +10078,7 @@ class SimpleTelegramBot:
             f"يضيف تأخير زمني قبل إرسال الرسائل المُوجهة"
         )
         
-        await self.force_new_message(event, message_text, buttons=buttons)
+        await self.edit_or_send_message(event, message_text, buttons=buttons)
 
     async def show_sending_interval_settings(self, event, task_id):
         """Show sending interval settings"""
@@ -10118,7 +10118,7 @@ class SimpleTelegramBot:
             f"يحدد الفترة الزمنية بين إرسال كل رسالة والتي تليها"
         )
         
-        await self.force_new_message(event, message_text, buttons=buttons)
+        await self.edit_or_send_message(event, message_text, buttons=buttons)
 
     async def toggle_forwarding_delay(self, event, task_id):
         """Toggle forwarding delay setting"""
