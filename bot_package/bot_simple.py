@@ -9904,7 +9904,7 @@ class SimpleTelegramBot:
             f"❌ الحظر: يحظر الرسائل غير المطابقة للشروط"
         )
         
-        await self.edit_or_send_message(event, message_text, buttons=buttons)
+        await self.force_new_message(event, message_text, buttons=buttons)
 
     async def toggle_character_limit(self, event, task_id):
         """Toggle character limit on/off"""
@@ -10038,7 +10038,7 @@ class SimpleTelegramBot:
             f"يحدد هذا الإعداد عدد الرسائل المسموح بإرسالها خلال فترة زمنية محددة"
         )
         
-        await self.edit_or_send_message(event, message_text, buttons=buttons)
+        await self.force_new_message(event, message_text, buttons=buttons)
 
     async def show_forwarding_delay_settings(self, event, task_id):
         """Show forwarding delay settings"""
@@ -10078,7 +10078,7 @@ class SimpleTelegramBot:
             f"يضيف تأخير زمني قبل إرسال الرسائل المُوجهة"
         )
         
-        await self.edit_or_send_message(event, message_text, buttons=buttons)
+        await self.force_new_message(event, message_text, buttons=buttons)
 
     async def show_sending_interval_settings(self, event, task_id):
         """Show sending interval settings"""
@@ -10118,7 +10118,7 @@ class SimpleTelegramBot:
             f"يحدد الفترة الزمنية بين إرسال كل رسالة والتي تليها"
         )
         
-        await self.edit_or_send_message(event, message_text, buttons=buttons)
+        await self.force_new_message(event, message_text, buttons=buttons)
 
     async def toggle_forwarding_delay(self, event, task_id):
         """Toggle forwarding delay setting"""
