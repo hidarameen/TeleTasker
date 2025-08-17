@@ -11590,7 +11590,7 @@ async def run_simple_bot():
     # Return bot instance for global access
     return bot
 
-class SimpleTelegramBot(SimpleTelegramBot):
+# Removed erroneous redefinition of class SimpleTelegramBot
     # ===== Audio Metadata Settings =====
     
     async def audio_metadata_settings(self, event, task_id):

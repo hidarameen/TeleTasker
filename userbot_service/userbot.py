@@ -447,6 +447,10 @@ class UserbotService:
                 cleaned_text = re.sub(r'www\.[^\s]+', '', cleaned_text)
                 # Remove domain-like patterns (improved pattern for sites like meyon.com.ye/path)
                 cleaned_text = re.sub(r'\b[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?\.([a-zA-Z]{2,6}\.?)+(/[^\s]*)?', '', cleaned_text)
+                # Remove Markdown hidden links [text](url) -> keep text only
+                cleaned_text = re.sub(r'\[([^\]]+)\]\(([^)]+)\)', r'\1', cleaned_text)
+                # Remove HTML anchor links <a href="url">text</a> -> keep text only
+                cleaned_text = re.sub(r'<a\s+href=[\'\"][^\'\"]+[\'\"]>(.*?)</a>', r'\1', cleaned_text, flags=re.IGNORECASE)
                 logger.debug(f"🧹 تم حذف الروابط من المهمة {task_id}")
 
             # 2. Remove emojis
