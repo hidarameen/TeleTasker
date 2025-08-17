@@ -120,6 +120,40 @@ class SimpleTelegramBot:
         logger.info("✅ Bot started successfully!")
         return True
 
+    # ===== Audio Metadata method wrappers (inside class) =====
+    async def audio_metadata_settings(self, event, task_id):
+        return await globals()['audio_metadata_settings'](self, event, task_id)
+
+    async def toggle_audio_metadata(self, event, task_id):
+        return await globals()['toggle_audio_metadata'](self, event, task_id)
+
+    async def select_audio_template(self, event, task_id):
+        return await globals()['select_audio_template'](self, event, task_id)
+
+    async def set_audio_template(self, event, task_id, template_name):
+        return await globals()['set_audio_template'](self, event, task_id, template_name)
+
+    async def album_art_settings(self, event, task_id):
+        return await globals()['album_art_settings'](self, event, task_id)
+
+    async def audio_merge_settings(self, event, task_id):
+        return await globals()['audio_merge_settings'](self, event, task_id)
+
+    async def advanced_audio_settings(self, event, task_id):
+        return await globals()['advanced_audio_settings'](self, event, task_id)
+
+    async def show_album_art_options(self, event, task_id: int):
+        return await globals()['show_album_art_options'](self, event, task_id)
+
+    async def show_intro_audio_settings(self, event, task_id: int):
+        return await globals()['show_intro_audio_settings'](self, event, task_id)
+
+    async def show_outro_audio_settings(self, event, task_id: int):
+        return await globals()['show_outro_audio_settings'](self, event, task_id)
+
+    async def show_merge_options(self, event, task_id: int):
+        return await globals()['show_merge_options'](self, event, task_id)
+
     async def handle_start(self, event):
         """Handle /start command"""
         logger.info(f"📥 تم استلام أمر /start من المستخدم: {event.sender_id}")
@@ -11556,6 +11590,7 @@ async def run_simple_bot():
     # Return bot instance for global access
     return bot
 
+class SimpleTelegramBot(SimpleTelegramBot):
     # ===== Audio Metadata Settings =====
     
     async def audio_metadata_settings(self, event, task_id):
