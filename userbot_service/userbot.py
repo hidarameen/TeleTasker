@@ -22,7 +22,7 @@ from telethon import TelegramClient, events
 from telethon.errors import SessionPasswordNeededError, AuthKeyUnregisteredError
 from telethon.sessions import StringSession
 from telethon.tl.types import MessageEntitySpoiler, DocumentAttributeFilename
-from database.database import Database
+from database import get_database
 from bot_package.config import API_ID, API_HASH
 import time
 from collections import defaultdict
@@ -87,7 +87,16 @@ class AlbumCollector:
 
 class UserbotService:
     def __init__(self):
-        self.db = Database()
+        """Initialize UserBot with database factory"""
+        # استخدام مصنع قاعدة البيانات
+        self.db = get_database()
+        
+        # معلومات قاعدة البيانات
+        from database import DatabaseFactory
+        self.db_info = DatabaseFactory.get_database_info()
+        
+        logger.info(f"🗄️ تم تهيئة قاعدة البيانات في UserBot: {self.db_info['name']}")
+        
         self.clients: Dict[int, TelegramClient] = {}  # user_id -> client
         self.user_tasks: Dict[int, List[Dict]] = {}   # user_id -> tasks
         self.user_locks: Dict[int, asyncio.Lock] = {}  # user_id -> lock for thread safety
@@ -837,7 +846,7 @@ class UserbotService:
                             logger.info(f"⏭️ تم تجاهل الترجمة في وضع التوجيه - إرسال الرسالة كما هي")
 
                         # Apply text formatting
-                        formatted_text = self.apply_text_formatting(task['id'], translated_text) if translated_text else translated_text
+                        formatted_text = self.apply_text_formatting(formatted_text, message_settings) if translated_text else translated_text
 
                         # Apply header and footer formatting
                         final_text = self.apply_message_formatting(formatted_text, message_settings)

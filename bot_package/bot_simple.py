@@ -7,7 +7,7 @@ import asyncio
 from telethon import TelegramClient, events
 from telethon.tl.custom import Button
 from telethon.sessions import StringSession
-from database.database import Database
+from database import get_database
 from userbot_service.userbot import userbot_instance
 from bot_package.config import BOT_TOKEN, API_ID, API_HASH
 import json
@@ -24,7 +24,15 @@ logger = logging.getLogger(__name__)
 
 class SimpleTelegramBot:
     def __init__(self):
-        self.db = Database()
+        # استخدام مصنع قاعدة البيانات
+        self.db = get_database()
+        
+        # معلومات قاعدة البيانات
+        from database import DatabaseFactory
+        self.db_info = DatabaseFactory.get_database_info()
+        
+        logger.info(f"🗄️ تم تهيئة قاعدة البيانات: {self.db_info['name']}")
+        
         self.bot = None
         self.conversation_states = {}
         self.user_states = {}  # For handling user input states
