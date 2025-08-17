@@ -76,7 +76,7 @@ class SimpleTelegramBot:
         try:
             tracked_msg = self.user_messages[user_id]
             # Check if message is not too old (5 minutes)
-            if time.time() - tracked_msg['timestamp'] < 300:
+            if time.time() - tracked_msg['timestamp'] < 300 and hasattr(self, 'bot') and self.bot:
                 await self.bot.edit_message(
                     tracked_msg['chat_id'],
                     tracked_msg['message_id'],
@@ -1759,6 +1759,25 @@ class SimpleTelegramBot:
                     except ValueError as e:
                         logger.error(f"❌ خطأ في تحليل معرف المهمة لمسح الفلتر: {e}, data='{data}', parts={parts}")
                         await event.answer("❌ خطأ في تحليل البيانات")
+            elif data.startswith("confirm_clear_replacements_"): # Handler for confirming clear replacements
+                parts = data.split("_")
+                if len(parts) >= 4:
+                    try:
+                        task_id = int(parts[3])
+                        await self.clear_replacements_execute(event, task_id)
+                    except ValueError as e:
+                        logger.error(f"❌ خطأ في تحليل معرف المهمة لتأكيد حذف الاستبدالات: {e}, data='{data}', parts={parts}")
+                        await event.answer("❌ خطأ في تحليل البيانات")
+            elif data.startswith("confirm_clear_inline_buttons_"): # Handler for confirming clear inline buttons
+                parts = data.split("_")
+                if len(parts) >= 5:
+                    try:
+                        # Get the last part which should be the task_id
+                        task_id = int(parts[-1])
+                        await self.clear_inline_buttons_execute(event, task_id)
+                    except ValueError as e:
+                        logger.error(f"❌ خطأ في تحليل معرف المهمة لتأكيد حذف الأزرار: {e}, data='{data}', parts={parts}")
+                        await event.answer("❌ خطأ في تحليل البيانات")
             elif data.startswith("confirm_clear_"): # Handler for confirming filter clear
                 parts = data.split("_")
                 if len(parts) >= 4:
@@ -1894,15 +1913,6 @@ class SimpleTelegramBot:
                     except ValueError as e:
                         logger.error(f"❌ خطأ في تحليل معرف المهمة لحذف الاستبدالات: {e}, data='{data}', parts={parts}")
                         await event.answer("❌ خطأ في تحليل البيانات")
-            elif data.startswith("confirm_clear_replacements_"): # Handler for confirming clear replacements
-                parts = data.split("_")
-                if len(parts) >= 4:
-                    try:
-                        task_id = int(parts[3])
-                        await self.clear_replacements_execute(event, task_id)
-                    except ValueError as e:
-                        logger.error(f"❌ خطأ في تحليل معرف المهمة لتأكيد حذف الاستبدالات: {e}, data='{data}', parts={parts}")
-                        await event.answer("❌ خطأ في تحليل البيانات")
             elif data.startswith("header_settings_"): # Handler for header settings
                 parts = data.split("_")
                 if len(parts) >= 3:
@@ -2001,16 +2011,6 @@ class SimpleTelegramBot:
                         await self.clear_inline_buttons_confirm(event, task_id)
                     except ValueError as e:
                         logger.error(f"❌ خطأ في تحليل معرف المهمة لحذف الأزرار: {e}, data='{data}', parts={parts}")
-                        await event.answer("❌ خطأ في تحليل البيانات")
-            elif data.startswith("confirm_clear_inline_buttons_"): # Handler for confirming clear inline buttons
-                parts = data.split("_")
-                if len(parts) >= 5:
-                    try:
-                        # Get the last part which should be the task_id
-                        task_id = int(parts[-1])
-                        await self.clear_inline_buttons_execute(event, task_id)
-                    except ValueError as e:
-                        logger.error(f"❌ خطأ في تحليل معرف المهمة لتأكيد حذف الأزرار: {e}, data='{data}', parts={parts}")
                         await event.answer("❌ خطأ في تحليل البيانات")
             elif data.startswith("forwarding_settings_"): # Handler for forwarding settings
                 parts = data.split("_")
