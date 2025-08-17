@@ -62,41 +62,63 @@ class SimpleTelegramBot:
         """Clear tracked message for user"""
         self.user_messages.pop(user_id, None)
 
-    async def edit_or_send_message(self, event, text, buttons=None, force_new=False):
-        """Edit existing message or send new one"""
+    async def delete_previous_message(self, user_id):
+        """Delete the previous tracked message for user"""
+        if user_id in self.user_messages:
+            try:
+                tracked_msg = self.user_messages[user_id]
+                if hasattr(self, 'bot') and self.bot:
+                    await self.bot.delete_messages(tracked_msg['chat_id'], tracked_msg['message_id'])
+                    logger.debug(f"🗑️ تم حذف الرسالة السابقة للمستخدم {user_id}")
+            except Exception as e:
+                logger.warning(f"فشل في حذف الرسالة السابقة للمستخدم {user_id}: {e}")
+            finally:
+                self.user_messages.pop(user_id, None)
+
+    async def force_new_message(self, event, text, buttons=None):
+        """Force send a new message and delete the previous one"""
         user_id = event.sender_id
         
-        # If force_new is True or no tracked message exists, send new message
-        if force_new or user_id not in self.user_messages:
-            message = await event.respond(text, buttons=buttons)
-            self.track_user_message(user_id, message.id, event.chat_id)
-            return message
+        # Delete previous message if exists
+        await self.delete_previous_message(user_id)
         
-        # Try to edit existing message
+        # Send new message
+        return await self.edit_or_send_message(event, text, buttons, force_new=True)
+
+    async def edit_or_send_message(self, event, text, buttons=None, force_new=False):
+        """Edit existing message or send new one with improved logic"""
+        user_id = event.sender_id
+        
+        # Always try to edit first unless force_new is True
+        if not force_new and user_id in self.user_messages:
+            try:
+                tracked_msg = self.user_messages[user_id]
+                # Check if message is not too old (10 minutes instead of 5)
+                if time.time() - tracked_msg['timestamp'] < 600 and hasattr(self, 'bot') and self.bot:
+                    await self.bot.edit_message(
+                        tracked_msg['chat_id'],
+                        tracked_msg['message_id'],
+                        text,
+                        buttons=buttons
+                    )
+                    # Update timestamp
+                    tracked_msg['timestamp'] = time.time()
+                    logger.debug(f"✅ تم تعديل الرسالة للمستخدم {user_id}")
+                    return None  # No new message object returned for edits
+                else:
+                    logger.debug(f"📝 الرسالة قديمة جداً، إرسال رسالة جديدة للمستخدم {user_id}")
+            except Exception as e:
+                logger.warning(f"فشل في تعديل الرسالة للمستخدم {user_id}: {e}")
+        
+        # Send new message if edit fails or force_new is True
         try:
-            tracked_msg = self.user_messages[user_id]
-            # Check if message is not too old (5 minutes)
-            if time.time() - tracked_msg['timestamp'] < 300 and hasattr(self, 'bot') and self.bot:
-                await self.bot.edit_message(
-                    tracked_msg['chat_id'],
-                    tracked_msg['message_id'],
-                    text,
-                    buttons=buttons
-                )
-                # Update timestamp
-                tracked_msg['timestamp'] = time.time()
-                return None  # No new message object returned for edits
-            else:
-                # Message too old, send new one
-                message = await event.respond(text, buttons=buttons)
-                self.track_user_message(user_id, message.id, event.chat_id)
-                return message
-        except Exception as e:
-            logger.warning(f"فشل في تعديل الرسالة للمستخدم {user_id}: {e}")
-            # Send new message if edit fails
             message = await event.respond(text, buttons=buttons)
             self.track_user_message(user_id, message.id, event.chat_id)
+            logger.debug(f"📤 تم إرسال رسالة جديدة للمستخدم {user_id}")
             return message
+        except Exception as e:
+            logger.error(f"فشل في إرسال رسالة جديدة للمستخدم {user_id}: {e}")
+            return None
 
     async def start(self):
         """Start the bot"""
@@ -397,7 +419,7 @@ class SimpleTelegramBot:
                 f"• إذا تعطل UserBot، أعد تسجيل الدخول\n\n"
                 f"اختر ما تريد فعله:"
             )
-            await self.edit_or_send_message(event, message_text, buttons=buttons)
+            await self.force_new_message(event, message_text, buttons=buttons)
             logger.info(f"✅ تم إرسال الرد بنجاح للمستخدم: {user_id}")
         else:
             # Show authentication menu
@@ -415,7 +437,7 @@ class SimpleTelegramBot:
                 f"• مراقبة المحادثات\n\n"
                 f"🔐 يجب تسجيل الدخول أولاً:"
             )
-            await self.edit_or_send_message(event, message_text, buttons=buttons)
+            await self.force_new_message(event, message_text, buttons=buttons)
             logger.info(f"✅ تم إرسال رد التسجيل بنجاح للمستخدم: {user_id}")
 
     async def handle_login(self, event):
@@ -2893,7 +2915,7 @@ class SimpleTelegramBot:
             f"اختر الميزة التي تريد إدارتها:"
         )
         
-        await self.edit_or_send_message(event, message_text, buttons=buttons)
+        await self.force_new_message(event, message_text, buttons=buttons)
 
     async def handle_message(self, event):
         """Handle text messages"""
@@ -3344,7 +3366,8 @@ class SimpleTelegramBot:
 
         # Default response only if not a target chat and not forwarded and in private chat
         if event.is_private:
-            await self.edit_or_send_message(event, "👋 أهلاً! استخدم /start لعرض القائمة الرئيسية")
+            # Use force_new_message to ensure we always show the main menu
+            await self.force_new_message(event, "👋 أهلاً! استخدم /start لعرض القائمة الرئيسية")
         else:
             logger.info(f"🚫 تجاهل الرد التلقائي في محادثة غير خاصة: {event.chat_id}")
 
@@ -3433,7 +3456,7 @@ class SimpleTelegramBot:
             f"اختر الإعداد الذي تريد تعديله:"
         )
         
-        await self.edit_or_send_message(event, message_text, buttons=buttons)
+        await self.force_new_message(event, message_text, buttons=buttons)
 
     async def toggle_forward_mode(self, event, task_id):
         """Toggle forward mode between copy and forward"""
@@ -4581,7 +4604,7 @@ class SimpleTelegramBot:
             f"اختر إجراء:"
         )
         
-        await self.edit_or_send_message(event, message_text, buttons=buttons)
+        await self.force_new_message(event, message_text, buttons=buttons)
 
     async def start_create_task(self, event):
         """Start creating new task"""
