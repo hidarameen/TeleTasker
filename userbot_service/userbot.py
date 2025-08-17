@@ -2061,13 +2061,23 @@ class UserbotService:
 
         final_text = text
 
+        def _md_to_html_links(s: str) -> str:
+            try:
+                import re
+                # Convert markdown [text](url) to HTML <a href="url">text</a>
+                return re.sub(r'\[([^\]]+)\]\(([^)]+)\)', r'<a href="\2">\1</a>', s)
+            except Exception:
+                return s
+
         # Add header if enabled
         if settings['header_enabled'] and settings['header_text']:
-            final_text = settings['header_text'] + "\n\n" + final_text
+            header_html = _md_to_html_links(settings['header_text'])
+            final_text = header_html + "\n\n" + final_text
 
         # Add footer if enabled
         if settings['footer_enabled'] and settings['footer_text']:
-            final_text = final_text + "\n\n" + settings['footer_text']
+            footer_html = _md_to_html_links(settings['footer_text'])
+            final_text = final_text + "\n\n" + footer_html
 
         return final_text
 
@@ -3588,7 +3598,7 @@ class UserbotService:
             cleaned_text = re.sub(r'<tg-spoiler>(.*?)</tg-spoiler>', r'\1', cleaned_text)
             # Remove quotes
             cleaned_text = re.sub(r'^>\s*', '', cleaned_text, flags=re.MULTILINE)
-            # Remove hyperlinks but keep text (both markdown and HTML)
+            # Preserve hyperlinks (do not strip anchor tags/markdown links)
             cleaned_text = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', cleaned_text)
             cleaned_text = re.sub(r'<a href="[^"]*">([^<]+)</a>', r'\1', cleaned_text)
 
@@ -3655,7 +3665,7 @@ class UserbotService:
             cleaned_text = re.sub(r'<tg-spoiler>(.*?)</tg-spoiler>', r'\1', cleaned_text)
             # Remove quotes
             cleaned_text = re.sub(r'^>\s*', '', cleaned_text, flags=re.MULTILINE)
-            # Remove hyperlinks but keep text (both markdown and HTML)
+            # Preserve hyperlinks (do not strip anchor tags/markdown links)
             cleaned_text = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', cleaned_text)
             cleaned_text = re.sub(r'<a href="[^"]*">([^<]+)</a>', r'\1', cleaned_text)
 
