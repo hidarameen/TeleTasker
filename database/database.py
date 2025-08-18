@@ -5523,7 +5523,7 @@ class Database:
                     # Update existing record
                     cursor.execute(f'''
                         UPDATE task_audio_template_settings 
-                        SET {tag_name}_template = ?, updated_at = CURRENT_TIMESTAMP
+                        SET {tag_name} = ?, updated_at = CURRENT_TIMESTAMP
                         WHERE task_id = ?
                     ''', (template_value, task_id))
                 else:
@@ -5612,4 +5612,31 @@ class Database:
                   new_values['preserve_original'], new_values['convert_to_mp3']))
             conn.commit()
             return True
+
+    def create_pending_message(self, task_id: int, user_id: int, source_chat_id: str, 
+                              source_message_id: int, message_data: str, message_type: str) -> bool:
+        """Create a new pending message"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT INTO pending_messages (
+                    task_id, user_id, source_chat_id, source_message_id, 
+                    message_data, message_type, status, created_at, expires_at
+                ) VALUES (?, ?, ?, ?, ?, ?, 'pending', CURRENT_TIMESTAMP, datetime('now', '+24 hours'))
+            ''', (task_id, user_id, source_chat_id, source_message_id, message_data, message_type))
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def get_pending_message(self, pending_id: int) -> Optional[Dict]:
+        """Get a specific pending message"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT * FROM pending_messages WHERE id = ?
+            ''', (pending_id,))
+            result = cursor.fetchone()
+            
+            if result:
+                return dict(result)
+            return None
 

@@ -22,7 +22,7 @@ from telethon import TelegramClient, events
 from telethon.errors import SessionPasswordNeededError, AuthKeyUnregisteredError
 from telethon.sessions import StringSession
 from telethon.tl.types import MessageEntitySpoiler, DocumentAttributeFilename
-from database.database import Database
+from database import get_database
 from bot_package.config import API_ID, API_HASH
 import time
 from collections import defaultdict
@@ -87,7 +87,16 @@ class AlbumCollector:
 
 class UserbotService:
     def __init__(self):
-        self.db = Database()
+        """Initialize UserBot with database factory"""
+        # استخدام مصنع قاعدة البيانات
+        self.db = get_database()
+        
+        # معلومات قاعدة البيانات
+        from database import DatabaseFactory
+        self.db_info = DatabaseFactory.get_database_info()
+        
+        logger.info(f"🗄️ تم تهيئة قاعدة البيانات في UserBot: {self.db_info['name']}")
+        
         self.clients: Dict[int, TelegramClient] = {}  # user_id -> client
         self.user_tasks: Dict[int, List[Dict]] = {}   # user_id -> tasks
         self.user_locks: Dict[int, asyncio.Lock] = {}  # user_id -> lock for thread safety
@@ -837,10 +846,20 @@ class UserbotService:
                             logger.info(f"⏭️ تم تجاهل الترجمة في وضع التوجيه - إرسال الرسالة كما هي")
 
                         # Apply text formatting
-                        formatted_text = self.apply_text_formatting(task['id'], translated_text) if translated_text else translated_text
+                        formatted_text = self.apply_text_formatting(formatted_text, message_settings) if translated_text else translated_text
 
                         # Apply header and footer formatting
                         final_text = self.apply_message_formatting(formatted_text, message_settings)
+                        
+                        # فحص ما إذا كان يحتاج إلى وضع النسخ بسبب التنسيق
+                        requires_copy_mode = (
+                            original_text != modified_text or  # تم تطبيق استبدالات النص
+                            modified_text != translated_text or  # تم تطبيق الترجمة
+                            translated_text != formatted_text or  # تم تطبيق تنسيق النص
+                            message_settings['header_enabled'] or  # الترويسة مفعلة
+                            message_settings['footer_enabled'] or  # التذييل مفعل
+                            message_settings['inline_buttons_enabled']  # الأزرار الإنلاين مفعلة
+                        )
 
                         # Check if we need to use copy mode due to formatting
                         requires_copy_mode = (
@@ -895,7 +914,15 @@ class UserbotService:
                         # Send message based on forward mode
                         logger.info(f"📨 جاري إرسال الرسالة (وضع تلقائي)...")
 
-                        if forward_mode == 'copy' or requires_copy_mode:
+                        # ===== منطق الإرسال المصحح =====
+                        
+                        # تحديد الوضع النهائي للإرسال
+                        final_send_mode = self._determine_final_send_mode(forward_mode, requires_copy_mode)
+                        
+                        logger.info(f"📤 إرسال الرسالة بالوضع: {final_send_mode} (الأصلي: {forward_mode}, يتطلب نسخ: {requires_copy_mode})")
+                        
+                        # إرسال الرسالة بالوضع المحدد
+                        if final_send_mode == 'copy':
                             # Copy mode: send as new message with all formatting applied
                             if requires_copy_mode:
                                 logger.info(f"🔄 استخدام وضع النسخ بسبب التنسيق المطبق")
@@ -1024,7 +1051,7 @@ class UserbotService:
                                     event.message,
                                     silent=forwarding_settings['silent_notifications']
                                 )
-                        else:
+                        else:  # forward mode
                             # Forward mode: check if we need copy mode
                             if requires_copy_mode:
                                 logger.info(f"🔄 تحويل إلى وضع النسخ بسبب التنسيق")
@@ -1268,6 +1295,7 @@ class UserbotService:
                                         )
                                 else:
                                     # No formatting changes, forward normally
+                                    logger.info(f"📤 توجيه عادي بدون تنسيق")
                                     forwarded_msg = await client.forward_messages(
                                         target_entity,
                                         event.message,
@@ -2017,11 +2045,24 @@ class UserbotService:
             
             logger.info(f"🎵 بدء معالجة الوسوم الصوتية للملف {file_name} في المهمة {task_id}")
             
-            # Get template from settings
-            template_name = audio_settings.get('template', 'default')
-            from audio_metadata_settings import get_template_by_name
-            template_data = get_template_by_name(template_name)
-            metadata_template = template_data['template']
+            # Get template settings from the new system
+            template_settings = self.db.get_audio_template_settings(task_id)
+            
+            # Convert template settings to metadata template format
+            metadata_template = {
+                'title': template_settings.get('title_template', '$title'),
+                'artist': template_settings.get('artist_template', '$artist'),
+                'album': template_settings.get('album_template', '$album'),
+                'year': template_settings.get('year_template', '$year'),
+                'genre': template_settings.get('genre_template', '$genre'),
+                'composer': template_settings.get('composer_template', '$composer'),
+                'comment': template_settings.get('comment_template', '$comment'),
+                'track': template_settings.get('track_template', '$track'),
+                'album_artist': template_settings.get('album_artist_template', '$album_artist'),
+                'lyrics': template_settings.get('lyrics_template', '$lyrics')
+            }
+            
+            logger.info(f"🎵 استخدام قالب الوسوم: {metadata_template}")
             
             # Process audio metadata
             album_art_path = None
@@ -3826,6 +3867,22 @@ class UserbotService:
             logger.error(f"تفاصيل الخطأ: {traceback.format_exc()}")
             return []
 
+    def _determine_final_send_mode(self, forward_mode: str, requires_copy_mode: bool) -> str:
+        """تحديد الوضع النهائي للإرسال - إصلاح منطق التوجيه"""
+        if forward_mode == 'copy':
+            # وضع النسخ - دائماً نسخ
+            return 'copy'
+        elif forward_mode == 'forward':
+            if requires_copy_mode:
+                # وضع التوجيه مع تنسيق - إجبار النسخ
+                logger.info(f"🔄 إجبار النسخ في وضع التوجيه بسبب التنسيق")
+                return 'copy'
+            else:
+                # وضع التوجيه بدون تنسيق - توجيه عادي
+                return 'forward'
+        else:
+            # افتراضي - توجيه
+            return 'forward'
 
 
 

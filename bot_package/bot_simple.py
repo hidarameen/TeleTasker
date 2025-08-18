@@ -7,7 +7,7 @@ import asyncio
 from telethon import TelegramClient, events
 from telethon.tl.custom import Button
 from telethon.sessions import StringSession
-from database.database import Database
+from database import get_database
 from userbot_service.userbot import userbot_instance
 from bot_package.config import BOT_TOKEN, API_ID, API_HASH
 import json
@@ -24,11 +24,23 @@ logger = logging.getLogger(__name__)
 
 class SimpleTelegramBot:
     def __init__(self):
-        self.db = Database()
+        # استخدام مصنع قاعدة البيانات
+        self.db = get_database()
+        
+        # معلومات قاعدة البيانات
+        from database import DatabaseFactory
+        self.db_info = DatabaseFactory.get_database_info()
+        
+        logger.info(f"🗄️ تم تهيئة قاعدة البيانات: {self.db_info['name']}")
+        
         self.bot = None
         self.conversation_states = {}
         self.user_states = {}  # For handling user input states
         self.user_messages = {}  # Track user messages for editing: {user_id: {message_id, chat_id, timestamp}}
+        
+        # تهيئة مدير وضع النشر
+        from .publishing_mode_manager import PublishingModeManager
+        self.publishing_manager = PublishingModeManager(self)
 
     def set_user_state(self, user_id, state, data=None):
         """Set user conversation state"""
@@ -2251,7 +2263,7 @@ class SimpleTelegramBot:
                 if len(parts) >= 3:
                     try:
                         task_id = int(parts[2])
-                        await self.show_publishing_mode_settings(event, task_id)
+                        await self.publishing_manager.show_publishing_mode_settings(event, task_id)
                     except ValueError as e:
                         logger.error(f"❌ خطأ في تحليل معرف المهمة لإعدادات وضع النشر: {e}")
                         await event.answer("❌ خطأ في معالجة الطلب")
@@ -2261,9 +2273,49 @@ class SimpleTelegramBot:
                 if len(parts) >= 4:
                     try:
                         task_id = int(parts[3])
-                        await self.toggle_publishing_mode(event, task_id)
+                        await self.publishing_manager.toggle_publishing_mode(event, task_id)
                     except ValueError as e:
                         logger.error(f"❌ خطأ في تحليل معرف المهمة لتبديل وضع النشر: {e}")
+                        await event.answer("❌ خطأ في معالجة الطلب")
+            elif data.startswith("show_pending_messages_"):
+                # Handle showing pending messages
+                parts = data.split("_")
+                if len(parts) >= 4:
+                    try:
+                        task_id = int(parts[3])
+                        await self.publishing_manager.show_pending_messages(event, task_id)
+                    except ValueError as e:
+                        logger.error(f"❌ خطأ في تحليل معرف المهمة لعرض الرسائل المعلقة: {e}")
+                        await event.answer("❌ خطأ في معالجة الطلب")
+            elif data.startswith("show_pending_details_"):
+                # Handle showing pending message details
+                parts = data.split("_")
+                if len(parts) >= 4:
+                    try:
+                        pending_id = int(parts[3])
+                        await self.publishing_manager.show_pending_message_details(event, pending_id)
+                    except ValueError as e:
+                        logger.error(f"❌ خطأ في تحليل معرف الرسالة المعلقة: {e}")
+                        await event.answer("❌ خطأ في معالجة الطلب")
+            elif data.startswith("approve_message_"):
+                # Handle message approval
+                parts = data.split("_")
+                if len(parts) >= 3:
+                    try:
+                        pending_id = int(parts[2])
+                        await self.publishing_manager.handle_message_approval(event, pending_id, True)
+                    except ValueError as e:
+                        logger.error(f"❌ خطأ في تحليل معرف الرسالة للموافقة: {e}")
+                        await event.answer("❌ خطأ في معالجة الطلب")
+            elif data.startswith("reject_message_"):
+                # Handle message rejection
+                parts = data.split("_")
+                if len(parts) >= 3:
+                    try:
+                        pending_id = int(parts[2])
+                        await self.publishing_manager.handle_message_approval(event, pending_id, False)
+                    except ValueError as e:
+                        logger.error(f"❌ خطأ في تحليل معرف الرسالة للرفض: {e}")
                         await event.answer("❌ خطأ في معالجة الطلب")
             elif data.startswith("toggle_split_album_"): # Handler for toggling split album
                 parts = data.split("_")
