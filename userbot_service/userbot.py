@@ -846,7 +846,7 @@ class UserbotService:
                             logger.info(f"⏭️ تم تجاهل الترجمة في وضع التوجيه - إرسال الرسالة كما هي")
 
                         # Apply text formatting
-                        formatted_text = self.apply_text_formatting(formatted_text, message_settings) if translated_text else translated_text
+                        formatted_text = self.apply_text_formatting(task['id'], translated_text) if translated_text else translated_text
 
                         # Apply header and footer formatting
                         final_text = self.apply_message_formatting(formatted_text, message_settings)
