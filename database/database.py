@@ -5523,7 +5523,7 @@ class Database:
                     # Update existing record
                     cursor.execute(f'''
                         UPDATE task_audio_template_settings 
-                        SET {tag_name}_template = ?, updated_at = CURRENT_TIMESTAMP
+                        SET {tag_name} = ?, updated_at = CURRENT_TIMESTAMP
                         WHERE task_id = ?
                     ''', (template_value, task_id))
                 else:

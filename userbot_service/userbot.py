@@ -2045,11 +2045,24 @@ class UserbotService:
             
             logger.info(f"🎵 بدء معالجة الوسوم الصوتية للملف {file_name} في المهمة {task_id}")
             
-            # Get template from settings
-            template_name = audio_settings.get('template', 'default')
-            from audio_metadata_settings import get_template_by_name
-            template_data = get_template_by_name(template_name)
-            metadata_template = template_data['template']
+            # Get template settings from the new system
+            template_settings = self.db.get_audio_template_settings(task_id)
+            
+            # Convert template settings to metadata template format
+            metadata_template = {
+                'title': template_settings.get('title_template', '$title'),
+                'artist': template_settings.get('artist_template', '$artist'),
+                'album': template_settings.get('album_template', '$album'),
+                'year': template_settings.get('year_template', '$year'),
+                'genre': template_settings.get('genre_template', '$genre'),
+                'composer': template_settings.get('composer_template', '$composer'),
+                'comment': template_settings.get('comment_template', '$comment'),
+                'track': template_settings.get('track_template', '$track'),
+                'album_artist': template_settings.get('album_artist_template', '$album_artist'),
+                'lyrics': template_settings.get('lyrics_template', '$lyrics')
+            }
+            
+            logger.info(f"🎵 استخدام قالب الوسوم: {metadata_template}")
             
             # Process audio metadata
             album_art_path = None
