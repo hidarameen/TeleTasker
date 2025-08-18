@@ -408,9 +408,13 @@ class ChannelsManagement:
 			return False
 
 	async def show_channel_selection(self, event, task_id, selection_type):
-		"""Show channel selection for sources/targets"""
+		"""Show channel selection for sources/targets with multi-select"""
 		user_id = event.sender_id
-		
+
+		# Normalize selection key and back button
+		selection_key = 'source' if selection_type in ('source', 'مصدر') else 'target'
+		back_button = f"manage_sources_{task_id}" if selection_key == 'source' else f"manage_targets_{task_id}"
+
 		# Check if user is authenticated
 		if not self.db.is_user_authenticated(user_id):
 			await event.answer("❌ يجب تسجيل الدخول أولاً")
@@ -421,7 +425,7 @@ class ChannelsManagement:
 		if not channels:
 			buttons = [
 				[Button.inline("➕ إضافة قناة", b"add_channel")],
-				[Button.inline("🔙 رجوع", f"task_manage_{task_id}")]
+				[Button.inline("🔙 رجوع", back_button.encode())]
 			]
 
 			message_text = (
@@ -444,12 +448,16 @@ class ChannelsManagement:
 			status_icon = "👑" if is_admin else "👤"
 
 			message += f"{i}. {status_icon} {channel_name}\n"
-			buttons.append([Button.inline(f"اختيار {i}", f"select_{selection_type}_{channel_id}_{task_id}")])
+			buttons.append([
+				Button.inline(
+					f"اختيار {i}",
+					f"toggle_select_channel_{selection_key}_{channel_id}_{task_id}".encode()
+				)
+			])
 
-		# Add navigation buttons
-		buttons.extend([
-			[Button.inline("➕ إضافة قناة جديدة", b"add_channel")],
-			[Button.inline("🔙 رجوع", f"task_manage_{task_id}")]
-		])
+		# Add action and navigation buttons
+		buttons.append([Button.inline("✅ تأكيد الاختيار", f"confirm_selected_channels_{selection_key}_{task_id}".encode())])
+		buttons.append([Button.inline("🔄 مسح الاختيار", f"clear_selected_channels_{selection_key}_{task_id}".encode())])
+		buttons.append([Button.inline("🔙 رجوع", back_button.encode())])
 
 		await self.bot.edit_or_send_message(event, message, buttons=buttons)
