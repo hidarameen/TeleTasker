@@ -1083,9 +1083,9 @@ class Database:
                     # Fallback to legacy data
                     sources = [{
                         'id': 0,
-                        'chat_id': row[1],
-                        'chat_name': row[2]
-                    }] if row[1] else []
+                        'chat_id': row[2],
+                        'chat_name': row[3]
+                    }] if row[2] else []
 
                 # Get all targets for this task  
                 targets = self.get_task_targets(task_id)
@@ -1093,9 +1093,9 @@ class Database:
                     # Fallback to legacy data
                     targets = [{
                         'id': 0,
-                        'chat_id': row[3],
-                        'chat_name': row[4]
-                    }] if row[3] else []
+                        'chat_id': row[4],
+                        'chat_name': row[5]
+                    }] if row[4] else []
 
                 # Create individual task entries for each source-target combination
                 for source in sources:
@@ -1107,7 +1107,7 @@ class Database:
                             'source_chat_name': source['chat_name'],
                             'target_chat_id': target['chat_id'],
                             'target_chat_name': target['chat_name'],
-                            'forward_mode': row[5] or 'forward'
+                            'forward_mode': row[6] or 'forward'
                         })
             return tasks
     

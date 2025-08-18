@@ -851,16 +851,6 @@ class UserbotService:
                         # Apply header and footer formatting
                         final_text = self.apply_message_formatting(formatted_text, message_settings)
                         
-                        # فحص ما إذا كان يحتاج إلى وضع النسخ بسبب التنسيق
-                        requires_copy_mode = (
-                            original_text != modified_text or  # تم تطبيق استبدالات النص
-                            modified_text != translated_text or  # تم تطبيق الترجمة
-                            translated_text != formatted_text or  # تم تطبيق تنسيق النص
-                            message_settings['header_enabled'] or  # الترويسة مفعلة
-                            message_settings['footer_enabled'] or  # التذييل مفعل
-                            message_settings['inline_buttons_enabled']  # الأزرار الإنلاين مفعلة
-                        )
-
                         # Check if we need to use copy mode due to formatting
                         requires_copy_mode = (
                             original_text != modified_text or  # Text replacements applied
