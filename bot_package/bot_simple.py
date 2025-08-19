@@ -7,7 +7,7 @@ import asyncio
 from telethon import TelegramClient, events
 from telethon.tl.custom import Button
 from telethon.sessions import StringSession
-from database import get_database
+from database.database import Database
 from userbot_service.userbot import userbot_instance
 from bot_package.config import BOT_TOKEN, API_ID, API_HASH
 import json
@@ -24,23 +24,11 @@ logger = logging.getLogger(__name__)
 
 class SimpleTelegramBot:
     def __init__(self):
-        # استخدام مصنع قاعدة البيانات
-        self.db = get_database()
-        
-        # معلومات قاعدة البيانات
-        from database import DatabaseFactory
-        self.db_info = DatabaseFactory.get_database_info()
-        
-        logger.info(f"🗄️ تم تهيئة قاعدة البيانات: {self.db_info['name']}")
-        
+        self.db = Database()
         self.bot = None
         self.conversation_states = {}
         self.user_states = {}  # For handling user input states
         self.user_messages = {}  # Track user messages for editing: {user_id: {message_id, chat_id, timestamp}}
-        
-        # تهيئة مدير وضع النشر
-        from .publishing_mode_manager import PublishingModeManager
-        self.publishing_manager = PublishingModeManager(self)
 
     def set_user_state(self, user_id, state, data=None):
         """Set user conversation state"""
@@ -74,63 +62,41 @@ class SimpleTelegramBot:
         """Clear tracked message for user"""
         self.user_messages.pop(user_id, None)
 
-    async def delete_previous_message(self, user_id):
-        """Delete the previous tracked message for user"""
-        if user_id in self.user_messages:
-            try:
-                tracked_msg = self.user_messages[user_id]
-                if hasattr(self, 'bot') and self.bot:
-                    await self.bot.delete_messages(tracked_msg['chat_id'], tracked_msg['message_id'])
-                    logger.debug(f"🗑️ تم حذف الرسالة السابقة للمستخدم {user_id}")
-            except Exception as e:
-                logger.warning(f"فشل في حذف الرسالة السابقة للمستخدم {user_id}: {e}")
-            finally:
-                self.user_messages.pop(user_id, None)
-
-    async def force_new_message(self, event, text, buttons=None):
-        """Force send a new message and delete the previous one"""
-        user_id = event.sender_id
-        
-        # Delete previous message if exists
-        await self.delete_previous_message(user_id)
-        
-        # Send new message
-        return await self.edit_or_send_message(event, text, buttons, force_new=True)
-
     async def edit_or_send_message(self, event, text, buttons=None, force_new=False):
-        """Edit existing message or send new one with improved logic"""
+        """Edit existing message or send new one"""
         user_id = event.sender_id
         
-        # Always try to edit first unless force_new is True
-        if not force_new and user_id in self.user_messages:
-            try:
-                tracked_msg = self.user_messages[user_id]
-                # Check if message is not too old (10 minutes instead of 5)
-                if time.time() - tracked_msg['timestamp'] < 600 and hasattr(self, 'bot') and self.bot:
-                    await self.bot.edit_message(
-                        tracked_msg['chat_id'],
-                        tracked_msg['message_id'],
-                        text,
-                        buttons=buttons
-                    )
-                    # Update timestamp
-                    tracked_msg['timestamp'] = time.time()
-                    logger.debug(f"✅ تم تعديل الرسالة للمستخدم {user_id}")
-                    return None  # No new message object returned for edits
-                else:
-                    logger.debug(f"📝 الرسالة قديمة جداً، إرسال رسالة جديدة للمستخدم {user_id}")
-            except Exception as e:
-                logger.warning(f"فشل في تعديل الرسالة للمستخدم {user_id}: {e}")
-        
-        # Send new message if edit fails or force_new is True
-        try:
+        # If force_new is True or no tracked message exists, send new message
+        if force_new or user_id not in self.user_messages:
             message = await event.respond(text, buttons=buttons)
             self.track_user_message(user_id, message.id, event.chat_id)
-            logger.debug(f"📤 تم إرسال رسالة جديدة للمستخدم {user_id}")
             return message
+        
+        # Try to edit existing message
+        try:
+            tracked_msg = self.user_messages[user_id]
+            # Check if message is not too old (5 minutes)
+            if time.time() - tracked_msg['timestamp'] < 300 and hasattr(self, 'bot') and self.bot:
+                await self.bot.edit_message(
+                    tracked_msg['chat_id'],
+                    tracked_msg['message_id'],
+                    text,
+                    buttons=buttons
+                )
+                # Update timestamp
+                tracked_msg['timestamp'] = time.time()
+                return None  # No new message object returned for edits
+            else:
+                # Message too old, send new one
+                message = await event.respond(text, buttons=buttons)
+                self.track_user_message(user_id, message.id, event.chat_id)
+                return message
         except Exception as e:
-            logger.error(f"فشل في إرسال رسالة جديدة للمستخدم {user_id}: {e}")
-            return None
+            logger.warning(f"فشل في تعديل الرسالة للمستخدم {user_id}: {e}")
+            # Send new message if edit fails
+            message = await event.respond(text, buttons=buttons)
+            self.track_user_message(user_id, message.id, event.chat_id)
+            return message
 
     async def start(self):
         """Start the bot"""
@@ -169,10 +135,9 @@ class SimpleTelegramBot:
         merge_status = "🟢 مفعل" if audio_settings.get('audio_merge_enabled') else "🔴 معطل"
         buttons = [
             [Button.inline(f"🔄 تبديل الحالة ({status_text})", f"toggle_audio_metadata_{task_id}")],
-            [Button.inline(f"⚙️ إعدادات القالب ({template_text})", f"audio_template_settings_{task_id}")],
+            [Button.inline(f"📋 اختيار القالب ({template_text})", f"select_audio_template_{task_id}")],
             [Button.inline(f"🖼️ صورة الغلاف ({art_status})", f"album_art_settings_{task_id}")],
             [Button.inline(f"🔗 دمج المقاطع ({merge_status})", f"audio_merge_settings_{task_id}")],
-            [Button.inline("⚙️ إعدادات متقدمة", f"advanced_audio_settings_{task_id}")],
             [Button.inline("🔙 رجوع لإعدادات المهمة", f"task_settings_{task_id}")]
         ]
         message_text = (
@@ -203,144 +168,37 @@ class SimpleTelegramBot:
         await event.answer(f"✅ تم {'تفعيل' if new_status else 'تعطيل'} الوسوم الصوتية")
         await self.audio_metadata_settings(event, task_id)
 
-    async def audio_template_settings(self, event, task_id):
-        """Show audio template settings with individual tag configuration"""
+    async def select_audio_template(self, event, task_id):
         user_id = event.sender_id
         task = self.db.get_task(task_id, user_id)
         if not task:
             await event.answer("❌ المهمة غير موجودة")
             return
-        
         task_name = task.get('task_name', 'مهمة بدون اسم')
-        template_settings = self.db.get_audio_template_settings(task_id)
-        
-        # Create buttons for each tag
         buttons = [
-            [Button.inline("🔹 العنوان (Title)", f"edit_audio_tag_{task_id}_title")],
-            [Button.inline("🔹 الفنان (Artist)", f"edit_audio_tag_{task_id}_artist")],
-            [Button.inline("🔹 فنان الألبوم (Album Artist)", f"edit_audio_tag_{task_id}_album_artist")],
-            [Button.inline("🔹 الألبوم (Album)", f"edit_audio_tag_{task_id}_album")],
-            [Button.inline("🔹 السنة (Year)", f"edit_audio_tag_{task_id}_year")],
-            [Button.inline("🔹 النوع (Genre)", f"edit_audio_tag_{task_id}_genre")],
-            [Button.inline("🔹 الملحن (Composer)", f"edit_audio_tag_{task_id}_composer")],
-            [Button.inline("🔹 تعليق (Comment)", f"edit_audio_tag_{task_id}_comment")],
-            [Button.inline("🔹 رقم المسار (Track)", f"edit_audio_tag_{task_id}_track")],
-            [Button.inline("🔹 المدة (Length)", f"edit_audio_tag_{task_id}_length")],
-            [Button.inline("🔹 كلمات الأغنية (Lyrics)", f"edit_audio_tag_{task_id}_lyrics")],
-            [Button.inline("🔄 إعادة تعيين للافتراضي", f"reset_audio_template_{task_id}")],
+            [Button.inline("🔹 القالب الافتراضي", f"set_audio_template_{task_id}_default")],
+            [Button.inline("🔹 قالب محسن", f"set_audio_template_{task_id}_enhanced")],
+            [Button.inline("🔹 قالب بسيط", f"set_audio_template_{task_id}_minimal")],
+            [Button.inline("🔹 قالب احترافي", f"set_audio_template_{task_id}_professional")],
+            [Button.inline("🔹 قالب مخصص", f"set_audio_template_{task_id}_custom")],
             [Button.inline("🔙 رجوع لإعدادات الوسوم الصوتية", f"audio_metadata_settings_{task_id}")]
         ]
-        
-        # Show current template values
         message_text = (
-            f"⚙️ إعدادات قالب الوسوم الصوتية للمهمة: {task_name}\n\n"
-            f"📋 القوالب الحالية:\n\n"
-            f"🔹 **العنوان**: `{template_settings['title_template']}`\n"
-            f"🔹 **الفنان**: `{template_settings['artist_template']}`\n"
-            f"🔹 **فنان الألبوم**: `{template_settings['album_artist_template']}`\n"
-            f"🔹 **الألبوم**: `{template_settings['album_template']}`\n"
-            f"🔹 **السنة**: `{template_settings['year_template']}`\n"
-            f"🔹 **النوع**: `{template_settings['genre_template']}`\n"
-            f"🔹 **الملحن**: `{template_settings['composer_template']}`\n"
-            f"🔹 **التعليق**: `{template_settings['comment_template']}`\n"
-            f"🔹 **رقم المسار**: `{template_settings['track_template']}`\n"
-            f"🔹 **المدة**: `{template_settings['length_template']}`\n"
-            f"🔹 **كلمات الأغنية**: `{template_settings['lyrics_template']}`\n\n"
-            f"💡 **المتغيرات المتاحة**:\n"
-            f"• `$title` - العنوان الأصلي\n"
-            f"• `$artist` - الفنان الأصلي\n"
-            f"• `$album` - الألبوم الأصلي\n"
-            f"• `$year` - السنة الأصلية\n"
-            f"• `$genre` - النوع الأصلي\n"
-            f"• `$track` - رقم المسار الأصلي\n"
-            f"• `$length` - المدة الأصلية\n"
-            f"• `$lyrics` - كلمات الأغنية الأصلية\n\n"
-            f"📝 **مثال على الاستخدام**:\n"
-            f"• `$title - Official` لإضافة نص للعنوان\n"
-            f"• `$artist ft. Guest` لإضافة فنان ضيف\n"
-            f"• `$album (Remastered)` لإضافة وصف للألبوم\n\n"
-            f"اختر الوسم الذي تريد تعديله:"
+            f"📋 اختيار قالب الوسوم الصوتية للمهمة: {task_name}\n\n"
+            f"🔹 القوالب المتاحة:\n\n"
+            f"**🔹 القالب الافتراضي**:\n"
+            f"يحافظ على الوسوم الأصلية مع إضافة تعليق\n\n"
+            f"**🔹 قالب محسن**:\n"
+            f"يضيف 'Enhanced' للعنوان ويحسن التعليق\n\n"
+            f"**🔹 قالب بسيط**:\n"
+            f"يحتوي على الوسوم الأساسية فقط\n\n"
+            f"**🔹 قالب احترافي**:\n"
+            f"مناسب للاستخدام التجاري والمهني\n\n"
+            f"**🔹 قالب مخصص**:\n"
+            f"للعلامات التجارية والتخصيص الكامل\n\n"
+            f"اختر القالب المناسب لاحتياجاتك:"
         )
-        
         await self.edit_or_send_message(event, message_text, buttons=buttons)
-
-    async def start_edit_audio_tag(self, event, task_id, tag_name):
-        """Start editing a specific audio tag template"""
-        user_id = event.sender_id
-        task = self.db.get_task(task_id, user_id)
-        if not task:
-            await event.answer("❌ المهمة غير موجودة")
-            return
-        
-        task_name = task.get('task_name', 'مهمة بدون اسم')
-        template_settings = self.db.get_audio_template_settings(task_id)
-        current_value = template_settings.get(f'{tag_name}_template', f'${tag_name}')
-        
-        # Set user state for editing this tag
-        self.set_user_state(user_id, f'editing_audio_tag_{tag_name}', {
-            'task_id': task_id,
-            'tag_name': tag_name,
-            'current_value': current_value
-        })
-        
-        # Tag display names
-        tag_display_names = {
-            'title': 'العنوان (Title)',
-            'artist': 'الفنان (Artist)',
-            'album_artist': 'فنان الألبوم (Album Artist)',
-            'album': 'الألبوم (Album)',
-            'year': 'السنة (Year)',
-            'genre': 'النوع (Genre)',
-            'composer': 'الملحن (Composer)',
-            'comment': 'التعليق (Comment)',
-            'track': 'رقم المسار (Track)',
-            'length': 'المدة (Length)',
-            'lyrics': 'كلمات الأغنية (Lyrics)'
-        }
-        
-        tag_display_name = tag_display_names.get(tag_name, tag_name)
-        
-        buttons = [
-            [Button.inline("❌ إلغاء", f"audio_template_settings_{task_id}")]
-        ]
-        
-        message_text = (
-            f"✏️ تحرير قالب {tag_display_name}\n\n"
-            f"📋 القيمة الحالية:\n"
-            f"`{current_value}`\n\n"
-            f"💡 **المتغيرات المتاحة**:\n"
-            f"• `$title` - العنوان الأصلي\n"
-            f"• `$artist` - الفنان الأصلي\n"
-            f"• `$album` - الألبوم الأصلي\n"
-            f"• `$year` - السنة الأصلية\n"
-            f"• `$genre` - النوع الأصلي\n"
-            f"• `$track` - رقم المسار الأصلي\n"
-            f"• `$length` - المدة الأصلية\n"
-            f"• `$lyrics` - كلمات الأغنية الأصلية\n\n"
-            f"📝 **أمثلة على الاستخدام**:\n"
-            f"• `$title - Official`\n"
-            f"• `$artist ft. Guest`\n"
-            f"• `$album (Remastered)`\n"
-            f"• `$title\\n$artist` (متعدد الأسطر)\n\n"
-            f"🔤 أرسل القالب الجديد الآن:"
-        )
-        
-        await self.force_new_message(event, message_text, buttons=buttons)
-
-    async def reset_audio_template(self, event, task_id):
-        """Reset audio template settings to default values"""
-        user_id = event.sender_id
-        task = self.db.get_task(task_id, user_id)
-        if not task:
-            await event.answer("❌ المهمة غير موجودة")
-            return
-        
-        success = self.db.reset_audio_template_settings(task_id)
-        if success:
-            await event.answer("✅ تم إعادة تعيين قالب الوسوم للقيم الافتراضية")
-            await self.audio_template_settings(event, task_id)
-        else:
-            await event.answer("❌ فشل في إعادة تعيين القالب")
 
     async def set_audio_template(self, event, task_id, template_name):
         user_id = event.sender_id
@@ -371,6 +229,7 @@ class SimpleTelegramBot:
         apply_all_status = "🟢 نعم" if audio_settings.get('apply_art_to_all') else "🔴 لا"
         art_path = audio_settings.get('album_art_path') or 'غير محدد'
         buttons = [
+            [Button.inline(f"🔄 تبديل الحالة ({art_status})", f"toggle_album_art_enabled_{task_id}")],
             [Button.inline("🖼️ رفع صورة غلاف", f"upload_album_art_{task_id}")],
             [Button.inline("⚙️ خيارات التطبيق", f"album_art_options_{task_id}")],
             [Button.inline("🔙 رجوع لإعدادات الوسوم الصوتية", f"audio_metadata_settings_{task_id}")]
@@ -461,7 +320,17 @@ class SimpleTelegramBot:
             [Button.inline(f"📦 تطبيق على جميع الملفات ({apply_all_status})", f"toggle_apply_art_to_all_{task_id}")],
             [Button.inline("🔙 رجوع", f"album_art_settings_{task_id}")]
         ]
-        await self.edit_or_send_message(event, "⚙️ خيارات صورة الغلاف:", buttons=buttons)
+        message_text = (
+            f"⚙️ خيارات تطبيق صورة الغلاف\n\n"
+            f"• تطبيق على جميع الملفات: استبدال جميع صور الغلاف\n"
+            f"• تطبيق فقط على الملفات بدون صورة: لا يستبدل الصور الموجودة\n"
+            f"• الحفاظ على الجودة 100%\n"
+            f"• دعم الصيغ: JPG, PNG, BMP, TIFF\n\n"
+            f"📊 الحالة الحالية:\n"
+            f"• تفعيل صورة الغلاف: {art_status}\n"
+            f"• تطبيق على الجميع: {apply_all_status}\n"
+        )
+        await self.edit_or_send_message(event, message_text, buttons=buttons)
 
     async def show_intro_audio_settings(self, event, task_id: int):
         settings = self.db.get_audio_metadata_settings(task_id)
@@ -538,7 +407,7 @@ class SimpleTelegramBot:
                 f"• إذا تعطل UserBot، أعد تسجيل الدخول\n\n"
                 f"اختر ما تريد فعله:"
             )
-            await self.force_new_message(event, message_text, buttons=buttons)
+            await self.edit_or_send_message(event, message_text, buttons=buttons)
             logger.info(f"✅ تم إرسال الرد بنجاح للمستخدم: {user_id}")
         else:
             # Show authentication menu
@@ -556,7 +425,7 @@ class SimpleTelegramBot:
                 f"• مراقبة المحادثات\n\n"
                 f"🔐 يجب تسجيل الدخول أولاً:"
             )
-            await self.force_new_message(event, message_text, buttons=buttons)
+            await self.edit_or_send_message(event, message_text, buttons=buttons)
             logger.info(f"✅ تم إرسال رد التسجيل بنجاح للمستخدم: {user_id}")
 
     async def handle_login(self, event):
@@ -625,16 +494,6 @@ class SimpleTelegramBot:
                 await self.handle_start(event)
             elif data == "manage_tasks":
                 await self.show_tasks_menu(event)
-            elif data == "manage_channels":
-                await self.show_channels_menu(event)
-            elif data == "add_channel":
-                await self.start_add_channel(event)
-            elif data == "list_channels":
-                await self.list_channels(event)
-            elif data == "add_multiple_channels":
-                await self.start_add_multiple_channels(event)
-            elif data == "finish_add_channels":
-                await self.finish_add_channels(event)
             elif data == "create_task":
                 await self.start_create_task(event)
             elif data == "list_tasks":
@@ -832,48 +691,25 @@ class SimpleTelegramBot:
                 except ValueError as e:
                     logger.error(f"❌ خطأ في تحليل معرف المهمة لتبديل الوسوم الصوتية: {e}")
                     await event.answer("❌ خطأ في تحليل البيانات")
-            elif data.startswith("audio_template_settings_"):
-                try:
-                    task_id = int(data.replace("audio_template_settings_", ""))
-                    await self.audio_template_settings(event, task_id)
-                except ValueError as e:
-                    logger.error(f"❌ خطأ في تحليل معرف المهمة لإعدادات قالب الوسوم: {e}")
-                    await event.answer("❌ خطأ في تحليل البيانات")
-            elif data.startswith("edit_audio_tag_"):
-                try:
-                    # Extract task_id and tag_name from "edit_audio_tag_7_title"
-                    remaining = data.replace("edit_audio_tag_", "")
-                    parts = remaining.split("_", 1)
-                    if len(parts) >= 2:
-                        task_id = int(parts[0])
-                        tag_name = parts[1]
-                        await self.start_edit_audio_tag(event, task_id, tag_name)
-                    else:
+            elif data.startswith("select_audio_template_"):
+                parts = data.split("_")
+                if len(parts) >= 3:
+                    try:
+                        task_id = int(parts[2])
+                        await self.select_audio_template(event, task_id)
+                    except ValueError as e:
+                        logger.error(f"❌ خطأ في تحليل معرف المهمة لاختيار قالب الوسوم: {e}")
                         await event.answer("❌ خطأ في تحليل البيانات")
-                except ValueError as e:
-                    logger.error(f"❌ خطأ في تحليل معرف المهمة لتحرير وسم الصوت: {e}")
-                    await event.answer("❌ خطأ في تحليل البيانات")
-            elif data.startswith("reset_audio_template_"):
-                try:
-                    task_id = int(data.replace("reset_audio_template_", ""))
-                    await self.reset_audio_template(event, task_id)
-                except ValueError as e:
-                    logger.error(f"❌ خطأ في تحليل معرف المهمة لإعادة تعيين قالب الوسوم: {e}")
-                    await event.answer("❌ خطأ في تحليل البيانات")
             elif data.startswith("set_audio_template_"):
-                try:
-                    # Extract task_id and template_name from "set_audio_template_7_default"
-                    remaining = data.replace("set_audio_template_", "")
-                    parts = remaining.split("_", 1)
-                    if len(parts) >= 2:
-                        task_id = int(parts[0])
-                        template_name = parts[1]
+                parts = data.split("_")
+                if len(parts) >= 4:
+                    try:
+                        task_id = int(parts[2])
+                        template_name = parts[3]
                         await self.set_audio_template(event, task_id, template_name)
-                    else:
+                    except ValueError as e:
+                        logger.error(f"❌ خطأ في تحليل معرف المهمة لتعيين قالب الوسوم: {e}")
                         await event.answer("❌ خطأ في تحليل البيانات")
-                except ValueError as e:
-                    logger.error(f"❌ خطأ في تحليل معرف المهمة لتعيين قالب الوسوم: {e}")
-                    await event.answer("❌ خطأ في تحليل البيانات")
             elif data.startswith("album_art_settings_"):
                 try:
                     task_id = int(data.replace("album_art_settings_", ""))
@@ -882,18 +718,16 @@ class SimpleTelegramBot:
                     logger.error(f"❌ خطأ في تحليل معرف المهمة لإعدادات صورة الغلاف: {e}")
                     await event.answer("❌ خطأ في تحليل البيانات")
             elif data.startswith("album_art_options_"):
-                parts = data.split("_")
-                if len(parts) >= 3:
-                    try:
-                        task_id = int(parts[2])
-                        await self.show_album_art_options(event, task_id)
-                    except ValueError:
-                        await event.answer("❌ خطأ في تحليل البيانات")
+                try:
+                    task_id = int(data.replace("album_art_options_", ""))
+                    await self.show_album_art_options(event, task_id)
+                except ValueError:
+                    await event.answer("❌ خطأ في تحليل البيانات")
             elif data.startswith("upload_album_art_"):
                 try:
                     task_id = int(data.replace("upload_album_art_", ""))
                     self.set_user_state(user_id, 'awaiting_album_art_upload', {'task_id': task_id})
-                    await self.force_new_message(event, "🖼️ أرسل الآن صورة الغلاف كصورة أو ملف.")
+                    await self.edit_or_send_message(event, "🖼️ أرسل الآن صورة الغلاف كصورة أو ملف.")
                 except ValueError:
                     await event.answer("❌ خطأ في تحليل البيانات")
             elif data.startswith("toggle_album_art_enabled_"):
@@ -934,24 +768,6 @@ class SimpleTelegramBot:
                     await self.advanced_audio_settings(event, task_id)
                 except ValueError:
                     await event.answer("❌ خطأ في تحليل البيانات")
-            elif data.startswith("delete_channel_"):
-                try:
-                    channel_id = int(data.replace("delete_channel_", ""))
-                    await self.delete_channel(event, channel_id)
-                except ValueError:
-                    await event.answer("❌ خطأ في تحليل البيانات")
-            elif data.startswith("edit_channel_"):
-                try:
-                    channel_id = int(data.replace("edit_channel_", ""))
-                    await self.edit_channel(event, channel_id)
-                except ValueError:
-                    await event.answer("❌ خطأ في تحليل البيانات")
-            elif data.startswith("refresh_channel_"):
-                try:
-                    channel_id = int(data.replace("refresh_channel_", ""))
-                    await self.refresh_channel_info(event, channel_id)
-                except ValueError:
-                    await event.answer("❌ خطأ في تحليل البيانات")
             elif data.startswith("audio_merge_settings_"):
                 try:
                     task_id = int(data.replace("audio_merge_settings_", ""))
@@ -984,7 +800,7 @@ class SimpleTelegramBot:
                 try:
                     task_id = int(data.replace("upload_intro_audio_", ""))
                     self.set_user_state(user_id, 'awaiting_intro_audio_upload', {'task_id': task_id})
-                    await self.force_new_message(event, "🎵 أرسل الآن ملف المقدمة (Audio)")
+                    await self.edit_or_send_message(event, "🎵 أرسل الآن ملف المقدمة (Audio)")
                 except ValueError:
                     await event.answer("❌ خطأ في تحليل البيانات")
             elif data.startswith("remove_intro_audio_"):
@@ -999,7 +815,7 @@ class SimpleTelegramBot:
                 try:
                     task_id = int(data.replace("upload_outro_audio_", ""))
                     self.set_user_state(user_id, 'awaiting_outro_audio_upload', {'task_id': task_id})
-                    await self.force_new_message(event, "🎵 أرسل الآن ملف الخاتمة (Audio)")
+                    await self.edit_or_send_message(event, "🎵 أرسل الآن ملف الخاتمة (Audio)")
                 except ValueError:
                     await event.answer("❌ خطأ في تحليل البيانات")
             elif data.startswith("remove_outro_audio_"):
@@ -2263,7 +2079,7 @@ class SimpleTelegramBot:
                 if len(parts) >= 3:
                     try:
                         task_id = int(parts[2])
-                        await self.publishing_manager.show_publishing_mode_settings(event, task_id)
+                        await self.show_publishing_mode_settings(event, task_id)
                     except ValueError as e:
                         logger.error(f"❌ خطأ في تحليل معرف المهمة لإعدادات وضع النشر: {e}")
                         await event.answer("❌ خطأ في معالجة الطلب")
@@ -2273,49 +2089,9 @@ class SimpleTelegramBot:
                 if len(parts) >= 4:
                     try:
                         task_id = int(parts[3])
-                        await self.publishing_manager.toggle_publishing_mode(event, task_id)
+                        await self.toggle_publishing_mode(event, task_id)
                     except ValueError as e:
                         logger.error(f"❌ خطأ في تحليل معرف المهمة لتبديل وضع النشر: {e}")
-                        await event.answer("❌ خطأ في معالجة الطلب")
-            elif data.startswith("show_pending_messages_"):
-                # Handle showing pending messages
-                parts = data.split("_")
-                if len(parts) >= 4:
-                    try:
-                        task_id = int(parts[3])
-                        await self.publishing_manager.show_pending_messages(event, task_id)
-                    except ValueError as e:
-                        logger.error(f"❌ خطأ في تحليل معرف المهمة لعرض الرسائل المعلقة: {e}")
-                        await event.answer("❌ خطأ في معالجة الطلب")
-            elif data.startswith("show_pending_details_"):
-                # Handle showing pending message details
-                parts = data.split("_")
-                if len(parts) >= 4:
-                    try:
-                        pending_id = int(parts[3])
-                        await self.publishing_manager.show_pending_message_details(event, pending_id)
-                    except ValueError as e:
-                        logger.error(f"❌ خطأ في تحليل معرف الرسالة المعلقة: {e}")
-                        await event.answer("❌ خطأ في معالجة الطلب")
-            elif data.startswith("approve_message_"):
-                # Handle message approval
-                parts = data.split("_")
-                if len(parts) >= 3:
-                    try:
-                        pending_id = int(parts[2])
-                        await self.publishing_manager.handle_message_approval(event, pending_id, True)
-                    except ValueError as e:
-                        logger.error(f"❌ خطأ في تحليل معرف الرسالة للموافقة: {e}")
-                        await event.answer("❌ خطأ في معالجة الطلب")
-            elif data.startswith("reject_message_"):
-                # Handle message rejection
-                parts = data.split("_")
-                if len(parts) >= 3:
-                    try:
-                        pending_id = int(parts[2])
-                        await self.publishing_manager.handle_message_approval(event, pending_id, False)
-                    except ValueError as e:
-                        logger.error(f"❌ خطأ في تحليل معرف الرسالة للرفض: {e}")
                         await event.answer("❌ خطأ في معالجة الطلب")
             elif data.startswith("toggle_split_album_"): # Handler for toggling split album
                 parts = data.split("_")
@@ -3203,30 +2979,6 @@ class SimpleTelegramBot:
                 finally:
                     self.clear_user_state(user_id)
                 return
-            elif current_user_state.startswith('editing_audio_tag_'):
-                try:
-                    tag_name = current_user_state.replace('editing_audio_tag_', '')
-                    task_id = current_user_data.get('task_id')
-                    new_template = message_text.strip()
-                    
-                    # Validate template (basic validation)
-                    if not new_template:
-                        await self.edit_or_send_message(event, "❌ لا يمكن أن يكون القالب فارغاً")
-                        return
-                    
-                    # Update the template
-                    success = self.db.update_audio_template_setting(task_id, tag_name, new_template)
-                    if success:
-                        await self.edit_or_send_message(event, f"✅ تم تحديث قالب {tag_name} بنجاح")
-                        await self.audio_template_settings(event, task_id)
-                    else:
-                        await self.edit_or_send_message(event, "❌ فشل في تحديث القالب")
-                except Exception as e:
-                    logger.error(f"خطأ في تحديث قالب الوسم الصوتي: {e}")
-                    await self.edit_or_send_message(event, "❌ حدث خطأ، يرجى المحاولة مرة أخرى")
-                finally:
-                    self.clear_user_state(user_id)
-                return
                     
             elif current_user_state == 'editing_char_min': # Handle editing character minimum
                 task_id = current_user_data.get('task_id')
@@ -3570,8 +3322,7 @@ class SimpleTelegramBot:
 
         # Default response only if not a target chat and not forwarded and in private chat
         if event.is_private:
-            # Use force_new_message to ensure we always show the main menu
-            await self.force_new_message(event, "👋 أهلاً! استخدم /start لعرض القائمة الرئيسية")
+            await self.edit_or_send_message(event, "👋 أهلاً! استخدم /start لعرض القائمة الرئيسية")
         else:
             logger.info(f"🚫 تجاهل الرد التلقائي في محادثة غير خاصة: {event.chat_id}")
 
@@ -4792,7 +4543,6 @@ class SimpleTelegramBot:
         buttons = [
             [Button.inline("➕ إنشاء مهمة جديدة", b"create_task")],
             [Button.inline("📋 عرض المهام", b"list_tasks")],
-            [Button.inline("📺 إدارة القنوات", b"manage_channels")],
             [Button.inline("🏠 القائمة الرئيسية", b"back_main")]
         ]
 
@@ -10065,35 +9815,44 @@ class SimpleTelegramBot:
         
         # Mode display
         mode_map = {
-            'allow': '✅ السماح',
-            'block': '❌ الحظر'
+            'max_limit': '🔺 حد أقصى',
+            'min_limit': '🔻 حد أدنى', 
+            'range': '📊 نطاق محدد'
         }
-        current_mode = settings['mode']
+        current_mode = settings['action_type']
         mode_text = mode_map.get(current_mode, current_mode)
         
-        # Values display
-        if settings.get('use_range', True):
-            values_text = f"من {settings['min_chars']} إلى {settings['max_chars']} حرف"
-        else:
+        # Values display based on mode
+        if current_mode == 'max_limit':
             values_text = f"الحد الأقصى: {settings['max_chars']} حرف"
+        elif current_mode == 'min_limit':
+            values_text = f"الحد الأدنى: {settings['min_chars']} حرف"
+        else:  # range
+            values_text = f"من {settings['min_chars']} إلى {settings['max_chars']} حرف"
         
         buttons = [
             [Button.inline(f"🔄 تبديل الحالة ({status_text})", f"toggle_char_limit_{task_id}")],
             [Button.inline(f"⚙️ تغيير الوضع ({mode_text})", f"cycle_char_mode_{task_id}")],
         ]
         
-        # Add edit buttons
-        buttons.extend([
-            [Button.inline(f"✏️ تعديل الحد الأدنى", f"edit_char_min_{task_id}"),
-             Button.inline(f"✏️ تعديل الحد الأقصى", f"edit_char_max_{task_id}")],
-        ])
+        # Add edit buttons based on current mode
+        if current_mode == 'max_limit':
+            buttons.append([Button.inline(f"✏️ تعديل الحد الأقصى", f"edit_char_max_{task_id}")])
+        elif current_mode == 'min_limit':
+            buttons.append([Button.inline(f"✏️ تعديل الحد الأدنى", f"edit_char_min_{task_id}")])
+        else:  # range
+            buttons.extend([
+                [Button.inline(f"✏️ تعديل الحد الأدنى", f"edit_char_min_{task_id}"),
+                 Button.inline(f"✏️ تعديل الحد الأقصى", f"edit_char_max_{task_id}")],
+            ])
         
         buttons.append([Button.inline("🔙 رجوع للمميزات المتقدمة", f"advanced_features_{task_id}")])
         
         # Mode descriptions
         mode_descriptions = {
-            'allow': 'يسمح بالرسائل التي تلتزم بحدود الأحرف المحددة',
-            'block': 'يحظر الرسائل التي لا تلتزم بحدود الأحرف المحددة'
+            'max_limit': 'يسمح بالرسائل التي لا تتجاوز الحد الأقصى المحدد',
+            'min_limit': 'يسمح بالرسائل التي تتجاوز الحد الأدنى المحدد',
+            'range': 'يسمح بالرسائل ضمن النطاق المحدد (بين الحد الأدنى والأقصى)'
         }
         
         message_text = (
@@ -10104,8 +9863,9 @@ class SimpleTelegramBot:
             f"📝 الوصف:\n"
             f"{mode_descriptions.get(current_mode, 'وضع غير محدد')}\n\n"
             f"💡 الأوضاع المتاحة:\n"
-            f"✅ السماح: يسمح بالرسائل المطابقة للشروط\n"
-            f"❌ الحظر: يحظر الرسائل غير المطابقة للشروط"
+            f"🔺 حد أقصى: رسائل ≤ {settings['max_chars']} حرف\n"
+            f"🔻 حد أدنى: رسائل ≥ {settings['min_chars']} حرف\n"
+            f"📊 نطاق: رسائل بين {settings['min_chars']}-{settings['max_chars']} حرف"
         )
         
         await self.edit_or_send_message(event, message_text, buttons=buttons)
@@ -10142,8 +9902,9 @@ class SimpleTelegramBot:
         new_mode = self.db.cycle_character_limit_mode(task_id)
         
         mode_names = {
-            'allow': '✅ السماح',
-            'block': '❌ الحظر'
+            'max_limit': '🔺 حد أقصى',
+            'min_limit': '🔻 حد أدنى',
+            'range': '📊 نطاق محدد'
         }
         
         await event.answer(f"✅ تم تغيير الوضع إلى: {mode_names.get(new_mode, new_mode)}")
@@ -12082,7 +11843,7 @@ async def run_simple_bot():
         
         buttons = [
             [Button.inline(f"🔄 تبديل الحالة ({status_text})", f"toggle_audio_metadata_{task_id}")],
-            [Button.inline(f"⚙️ إعدادات القالب ({template_text})", f"audio_template_settings_{task_id}")],
+            [Button.inline(f"📋 اختيار القالب ({template_text})", f"select_audio_template_{task_id}")],
             [Button.inline(f"🖼️ صورة الغلاف ({art_status})", f"album_art_settings_{task_id}")],
             [Button.inline(f"🔗 دمج المقاطع ({merge_status})", f"audio_merge_settings_{task_id}")],
             [Button.inline("⚙️ إعدادات متقدمة", f"advanced_audio_settings_{task_id}")],
