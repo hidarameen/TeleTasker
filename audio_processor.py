@@ -148,26 +148,57 @@ class AudioProcessor:
                               apply_art_to_all: bool = False,
                               audio_intro_path: Optional[str] = None,
                               audio_outro_path: Optional[str] = None,
-                              intro_position: str = 'start') -> Optional[bytes]:
+                              intro_position: str = 'start',
+                              preserve_original: bool = True,
+                              convert_to_mp3: bool = True) -> Optional[bytes]:
         """معالجة الوسوم الصوتية مع القالب المحدد"""
         try:
-            # إنشاء ملف مؤقت
-            temp_input = tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file_name)[1])
+            # إنشاء ملف مؤقت للإدخال
+            original_suffix = os.path.splitext(file_name)[1]
+            temp_input = tempfile.NamedTemporaryFile(delete=False, suffix=original_suffix)
             temp_input.write(audio_bytes)
             temp_input.close()
             
             try:
-                # الحصول على معلومات المقطع الصوتي
-                audio_info = self.get_audio_info(temp_input.name)
+                # مسار المصدر للمعالجة (قد يتغير في حال التحويل إلى MP3)
+                source_path_for_tagging = temp_input.name
+
+                # في حال تفعيل التحويل إلى MP3 والملف ليس MP3، قم بالتحويل باستخدام FFmpeg
+                if convert_to_mp3 and self.ffmpeg_available:
+                    if not file_name.lower().endswith('.mp3'):
+                        try:
+                            temp_converted = tempfile.mktemp(suffix='.mp3')
+                            cmd = [
+                                'ffmpeg', '-y', '-i', temp_input.name,
+                                '-vn', '-c:a', 'libmp3lame', '-q:a', '2',
+                                temp_converted
+                            ]
+                            result = subprocess.run(cmd, capture_output=True, text=True)
+                            if result.returncode == 0 and os.path.exists(temp_converted):
+                                source_path_for_tagging = temp_converted
+                                logger.info("🔄 تم تحويل الملف إلى MP3 بنجاح قبل تعديل الوسوم")
+                            else:
+                                logger.warning(f"⚠️ فشل التحويل إلى MP3: {result.stderr}")
+                        except Exception as e:
+                            logger.warning(f"⚠️ استثناء أثناء التحويل إلى MP3: {e}")
+
+                # الحصول على معلومات المقطع الصوتي من المسار المستخدم للوسوم
+                audio_info = self.get_audio_info(source_path_for_tagging)
                 if not audio_info:
                     logger.error("فشل في الحصول على معلومات المقطع الصوتي")
+                    # تنظيف وإرجاع الأصلي
+                    try:
+                        os.unlink(temp_input.name)
+                    except:
+                        pass
                     return audio_bytes
                 
-                # إنشاء ملف مؤقت للمخرجات
-                temp_output = tempfile.mktemp(suffix='.mp3')
+                # إنشاء ملف مؤقت للمخرجات (امتداد مطابق للمصدر بعد التحويل)
+                output_suffix = '.mp3' if source_path_for_tagging.lower().endswith('.mp3') else original_suffix
+                temp_output = tempfile.mktemp(suffix=output_suffix)
                 
                 # معالجة الوسوم
-                if self._apply_metadata_template(temp_input.name, temp_output, metadata_template, 
+                if self._apply_metadata_template(source_path_for_tagging, temp_output, metadata_template, 
                                                audio_info, album_art_path, apply_art_to_all):
                     logger.info("✅ تم تطبيق الوسوم بنجاح")
                     
@@ -186,19 +217,33 @@ class AudioProcessor:
                         processed_bytes = f.read()
                     
                     # تنظيف الملفات المؤقتة
-                    os.unlink(temp_input.name)
+                    try:
+                        os.unlink(temp_input.name)
+                    except:
+                        pass
+                    if source_path_for_tagging != temp_input.name:
+                        try:
+                            os.unlink(source_path_for_tagging)
+                        except:
+                            pass
                     if os.path.exists(temp_output):
                         os.unlink(temp_output)
                     
                     return processed_bytes
                 else:
                     logger.error("فشل في تطبيق الوسوم")
-                    os.unlink(temp_input.name)
+                    try:
+                        os.unlink(temp_input.name)
+                    except:
+                        pass
                     return audio_bytes
                     
             except Exception as e:
                 logger.error(f"خطأ في معالجة الوسوم: {e}")
-                os.unlink(temp_input.name)
+                try:
+                    os.unlink(temp_input.name)
+                except:
+                    pass
                 return audio_bytes
                 
         except Exception as e:
@@ -481,11 +526,13 @@ class AudioProcessor:
                                          audio_intro_path: Optional[str] = None,
                                          audio_outro_path: Optional[str] = None,
                                          intro_position: str = 'start',
-                                         task_id: int = 0) -> Optional[bytes]:
+                                         task_id: int = 0,
+                                         preserve_original: bool = True,
+                                         convert_to_mp3: bool = True) -> Optional[bytes]:
         """معالجة المقطع الصوتي مرة واحدة لإعادة الاستخدام"""
         try:
             # إنشاء مفتاح cache
-            cache_key = f"{task_id}_{hash(audio_bytes)}_{file_name}"
+            cache_key = f"{task_id}_{hash(audio_bytes)}_{file_name}_{int(preserve_original)}_{int(convert_to_mp3)}"
             
             # التحقق من cache
             if cache_key in self.processed_audio_cache:
@@ -495,7 +542,8 @@ class AudioProcessor:
             # معالجة المقطع الصوتي
             processed_audio = self.process_audio_metadata(
                 audio_bytes, file_name, metadata_template, album_art_path,
-                apply_art_to_all, audio_intro_path, audio_outro_path, intro_position
+                apply_art_to_all, audio_intro_path, audio_outro_path, intro_position,
+                preserve_original=preserve_original, convert_to_mp3=convert_to_mp3
             )
             
             if processed_audio and processed_audio != audio_bytes:

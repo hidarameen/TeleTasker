@@ -481,19 +481,42 @@ class PostgreSQLDatabase:
                 )
             ''')
 
-            # Task audio metadata settings table
+            # Task audio metadata settings table (parity with SQLite)
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS task_audio_metadata_settings (
                     id SERIAL PRIMARY KEY,
-                    task_id INTEGER NOT NULL,
+                    task_id INTEGER NOT NULL UNIQUE,
                     enabled BOOLEAN DEFAULT FALSE,
                     template TEXT DEFAULT 'default',
-                    preserve_quality BOOLEAN DEFAULT TRUE,
-                    convert_to_mp3 BOOLEAN DEFAULT FALSE,
+                    album_art_enabled BOOLEAN DEFAULT FALSE,
+                    album_art_path TEXT,
+                    apply_art_to_all BOOLEAN DEFAULT FALSE,
+                    audio_merge_enabled BOOLEAN DEFAULT FALSE,
+                    intro_audio_path TEXT,
+                    outro_audio_path TEXT,
+                    intro_position TEXT DEFAULT 'start',
+                    preserve_original BOOLEAN DEFAULT TRUE,
+                    convert_to_mp3 BOOLEAN DEFAULT TRUE,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (task_id) REFERENCES tasks (id) ON DELETE CASCADE
                 )
             ''')
+
+            # Ensure missing columns exist for older deployments
+            try:
+                cursor.execute("ALTER TABLE task_audio_metadata_settings ADD COLUMN IF NOT EXISTS album_art_enabled BOOLEAN DEFAULT FALSE")
+                cursor.execute("ALTER TABLE task_audio_metadata_settings ADD COLUMN IF NOT EXISTS album_art_path TEXT")
+                cursor.execute("ALTER TABLE task_audio_metadata_settings ADD COLUMN IF NOT EXISTS apply_art_to_all BOOLEAN DEFAULT FALSE")
+                cursor.execute("ALTER TABLE task_audio_metadata_settings ADD COLUMN IF NOT EXISTS audio_merge_enabled BOOLEAN DEFAULT FALSE")
+                cursor.execute("ALTER TABLE task_audio_metadata_settings ADD COLUMN IF NOT EXISTS intro_audio_path TEXT")
+                cursor.execute("ALTER TABLE task_audio_metadata_settings ADD COLUMN IF NOT EXISTS outro_audio_path TEXT")
+                cursor.execute("ALTER TABLE task_audio_metadata_settings ADD COLUMN IF NOT EXISTS intro_position TEXT DEFAULT 'start'")
+                cursor.execute("ALTER TABLE task_audio_metadata_settings ADD COLUMN IF NOT EXISTS preserve_original BOOLEAN DEFAULT TRUE")
+                cursor.execute("ALTER TABLE task_audio_metadata_settings ADD COLUMN IF NOT EXISTS convert_to_mp3 BOOLEAN DEFAULT TRUE")
+                cursor.execute("ALTER TABLE task_audio_metadata_settings ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
+            except Exception as _:
+                pass
 
             # Task character limit settings table
             cursor.execute('''
