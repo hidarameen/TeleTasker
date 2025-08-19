@@ -2071,9 +2071,7 @@ class UserbotService:
                 audio_intro_path=intro_path,
                 audio_outro_path=outro_path,
                 intro_position=intro_position,
-                task_id=task_id,
-                preserve_original=bool(audio_settings.get('preserve_original', True)),
-                convert_to_mp3=bool(audio_settings.get('convert_to_mp3', True))
+                task_id=task_id
             )
             
             if processed_audio and processed_audio != media_bytes:
